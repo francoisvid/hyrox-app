@@ -115,7 +115,7 @@ struct ProfileView: View {
                         .font(.headline)
                         .foregroundColor(.white)
                     
-                    HStack(spacing: 20) {
+                    HStack(spacing: 10) {
                         ActivityStatCard(
                             title: "Entraînements",
                             value: "\(totalWorkouts)",
@@ -228,17 +228,21 @@ struct ActivityStatCard: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundColor(.yellow)
+                .frame(height: 30)
             
             Text(value)
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
+                .frame(height: 30)
             
             Text(title)
                 .font(.caption)
                 .foregroundColor(.gray)
+                .frame(height: 20)
         }
         .frame(maxWidth: .infinity)
+        .frame(height: 120)
         .padding()
         .background(Color.black.opacity(0.3))
         .cornerRadius(8)

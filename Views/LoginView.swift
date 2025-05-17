@@ -3,8 +3,8 @@ import SwiftUI
 
 struct LoginView: View {
     // Propriétés d'état
-    @State private var email = ""
-    @State private var password = ""
+    @State private var email = "vidalfit@gmail.com"
+    @State private var password = "password"
     @State private var rememberMe = false
     @State private var isPasswordVisible = false
     @State private var showAlert = false
@@ -71,7 +71,7 @@ struct LoginView: View {
                     // Lien vers conditions d'utilisation
                     termsAndConditions
                 }
-                .padding(.top, 60)
+                .padding(.top, 20)
             }
             
             // Indicateur de chargement
@@ -159,10 +159,9 @@ struct LoginView: View {
                     .foregroundColor(.gray)
                     .frame(width: 20)
                 
-                TextField("votre@email.com", text: $email)
-                    .autocapitalization(.none)
-                    .keyboardType(.emailAddress)
+                TextField("Votre email", text: $email)
                     .foregroundColor(.white)
+                    
             }
             .padding()
             .background(Color(.systemGray6))
@@ -453,5 +452,12 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+struct LoginView_Previews: PreviewProvider {
+    static var previews: some View {
+        LoginView(isLoggedIn: .constant(false))
+            .preferredColorScheme(.dark)
     }
 }
