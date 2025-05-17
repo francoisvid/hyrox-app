@@ -311,6 +311,35 @@ class WorkoutManager: ObservableObject {
     func getTotalDistance() -> Double {
         return workouts.reduce(0) { $0 + $1.distance }
     }
+    
+    // MARK: - Deletion Operations
+    
+    /// Supprime un entraînement spécifique
+    func deleteWorkout(_ workout: Workout) {
+        let context = persistenceController.container.viewContext
+        context.delete(workout)
+        saveContext()
+        loadWorkouts()
+        updatePersonalBests()
+    }
+    
+    /// Supprime tous les entraînements
+    func deleteAllWorkouts() {
+        let context = persistenceController.container.viewContext
+        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = Workout.fetchRequest()
+        
+        do {
+            let workouts = try context.fetch(fetchRequest) as? [Workout] ?? []
+            for workout in workouts {
+                context.delete(workout)
+            }
+            saveContext()
+            loadWorkouts()
+            updatePersonalBests()
+        } catch {
+            print("Erreur lors de la suppression des entraînements: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - Exercise Extension

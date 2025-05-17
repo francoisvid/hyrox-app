@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StatisticsView: View {
     @ObservedObject var viewModel: StatsViewModel
+    @State private var showingDeleteAlert = false
     let periods = ["3 mois", "6 mois", "1 an", "2 ans"]
     
     // Formateurs
@@ -20,10 +21,24 @@ struct StatisticsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Statistiques")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
+                HStack {
+                    Text("Statistiques")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showingDeleteAlert = true
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .padding(8)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                }
                 
                 // Sélecteur de période
                 HStack {
@@ -68,7 +83,10 @@ struct StatisticsView: View {
                         exerciseName: exerciseName,
                         history: getExerciseHistory(name: exerciseName),
                         personalBest: viewModel.personalBests[exerciseName],
-                        formatTime: formatTime
+                        formatTime: formatTime,
+                        onDelete: { workout in
+                            viewModel.deleteWorkout(workout)
+                        }
                     )
                 }
                 
@@ -167,6 +185,14 @@ struct StatisticsView: View {
             .padding()
         }
         .background(Color.black.ignoresSafeArea())
+        .alert("Supprimer toutes les séances", isPresented: $showingDeleteAlert) {
+            Button("Annuler", role: .cancel) { }
+            Button("Supprimer", role: .destructive) {
+                viewModel.deleteAllWorkouts()
+            }
+        } message: {
+            Text("Êtes-vous sûr de vouloir supprimer toutes les séances ? Cette action est irréversible.")
+        }
     }
     
     // Fonctions utilitaires
@@ -215,6 +241,10 @@ struct ExerciseHistoryCard: View {
     let history: [(Exercise, Date)]
     let personalBest: Exercise?
     let formatTime: (TimeInterval) -> String
+    let onDelete: (Workout) -> Void
+    
+    @State private var workoutToDelete: Workout?
+    @State private var showingDeleteAlert = false
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -234,7 +264,7 @@ struct ExerciseHistoryCard: View {
                 
                 // Badge meilleur temps
                 if let best = personalBest {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 10) {
                         Image(systemName: "trophy.fill")
                             .foregroundColor(.yellow)
                             .font(.caption)
@@ -261,47 +291,70 @@ struct ExerciseHistoryCard: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else {
-                ForEach(0..<min(3, history.count), id: \.self) { index in
-                    let (exercise, date) = history[index]
-                    let isBest = personalBest?.id == exercise.id
-                    
-                    HStack {
-                        // Affichage de la date
-                        Text(dateFormatter.string(from: date))
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
+                List {
+                    ForEach(0..<min(3, history.count), id: \.self) { index in
+                        let (exercise, date) = history[index]
+                        let isBest = personalBest?.id == exercise.id
                         
-                        Spacer()
-                        
-                        HStack(spacing: 8) {
-                            if exercise.repetitions > 0 {
-                                Text("\(exercise.repetitions) reps")
-                                    .font(.caption)
+                        if let workout = exercise.workout {
+                            HStack {
+                                // Affichage de la date
+                                Text(dateFormatter.string(from: date))
+                                    .font(.subheadline)
                                     .foregroundColor(.gray)
+                                
+                                Spacer()
+                                
+                                HStack(spacing: 8) {
+                                    if exercise.repetitions > 0 {
+                                        Text("\(exercise.repetitions) reps")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    
+                                    if exercise.distance > 0 {
+                                        Text("\(Int(exercise.distance)) m")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    
+                                    Text(formatTime(exercise.duration))
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(isBest ? .yellow : .white)
+                                }
                             }
-                            
-                            if exercise.distance > 0 {
-                                Text("\(Int(exercise.distance)) m")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 14, trailing: 0))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if let workout = exercise.workout {
+                                        workoutToDelete = workout
+                                        showingDeleteAlert = true
+                                    }
+                                } label: {
+                                    Label("Supprimer", systemImage: "trash")
+                                }
                             }
-                            
-                            Text(formatTime(exercise.duration))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(isBest ? .yellow : .white)
                         }
                     }
-                    
-                    if index < min(3, history.count) - 1 {
-                        Divider()
-                            .background(Color.gray.opacity(0.3))
-                    }
                 }
+                .listStyle(PlainListStyle())
+                .frame(height: CGFloat(min(3, history.count)) * 44)
             }
         }
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
+        .alert("Supprimer la séance", isPresented: $showingDeleteAlert) {
+            Button("Annuler", role: .cancel) { }
+            Button("Supprimer", role: .destructive) {
+                if let workout = workoutToDelete {
+                    onDelete(workout)
+                }
+            }
+        } message: {
+            Text("Attention, la suppression de cet exercice supprimera tout l'historique des exercices de cette séance.")
+        }
     }
 }
 
@@ -561,5 +614,19 @@ struct ChartLineView: View {
             }
             .stroke(Color.yellow, lineWidth: 2)
         }
+    }
+}
+
+struct StatisticsView_Previews: PreviewProvider {
+    static var previews: some View {
+        let persistenceController = PersistenceController(inMemory: true)
+        persistenceController.createDemoDataIfNeeded()
+        
+        let workoutManager = WorkoutManager(persistenceController: persistenceController)
+        let viewModel = StatsViewModel(workoutManager: workoutManager)
+        
+        return StatisticsView(viewModel: viewModel)
+            .preferredColorScheme(.dark)
+            .environment(\.managedObjectContext, persistenceController.container.viewContext)
     }
 }

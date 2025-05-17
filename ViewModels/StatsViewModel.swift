@@ -194,4 +194,16 @@ class StatsViewModel: ObservableObject {
         formatter.timeStyle = .none
         return formatter.string(from: date)
     }
+    
+    // MARK: - Deletion Operations
+    
+    /// Supprime un entraînement spécifique
+    func deleteWorkout(_ workout: Workout) {
+        workoutManager.deleteWorkout(workout)
+    }
+    
+    /// Supprime tous les entraînements
+    func deleteAllWorkouts() {
+        workoutManager.deleteAllWorkouts()
+    }
 }
