@@ -50,9 +50,16 @@ struct DashboardView: View {
                                                     .foregroundColor(.gray)
                                                     .font(.subheadline)
                                                 Spacer()
-                                                Text(viewModel.formatTime(exercise.duration))
-                                                    .foregroundColor(.white)
-                                                    .font(.subheadline)
+                                                HStack(alignment: .center, spacing: 10) {
+                                                    Text(viewModel.formatTime(exercise.duration))
+                                                        .foregroundColor(.white)
+                                                        .font(.subheadline)
+                                                    if let bestTime = viewModel.getBestTimeForExercise(name: name) {
+                                                        Text((viewModel.formatTime(bestTime)))
+                                                            .foregroundColor(.yellow)
+                                                            .font(.subheadline)
+                                                    }
+                                                }
                                             }
                                         }
                                     }

@@ -102,7 +102,7 @@ struct LoginView: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(.white)
             
-            Text("Entraînez-vous. Suivez. Progressez.")
+            Text("Entraînez-vous. Suivez et Progressez")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .padding(.bottom, 20)

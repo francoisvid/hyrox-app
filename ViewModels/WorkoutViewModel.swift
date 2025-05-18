@@ -189,6 +189,11 @@ class WorkoutViewModel: ObservableObject {
         return (distance, repetitions, description)
     }
     
+    /// Récupère le meilleur temps pour un exercice donné
+    func getBestTimeForExercise(name: String) -> TimeInterval? {
+        return workoutManager.personalBests[name]?.duration
+    }
+    
     /// Détermine si un exercice est basé sur la distance
     func isDistanceBasedExercise(_ exerciseName: String) -> Bool {
         return HyroxConstants.isDistanceBased(exerciseName)
