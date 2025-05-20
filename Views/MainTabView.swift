@@ -1,42 +1,41 @@
-// Dans MainTabView.swift
+// MainTabView.swift
 
-import SwiftUICore
 import SwiftUI
+
 struct MainTabView: View {
-    @ObservedObject var workoutManager: WorkoutManager
-    
-    // Créer les ViewModels avec le WorkoutManager
-    @StateObject private var workoutViewModel: WorkoutViewModel
-    @StateObject private var statsViewModel: StatsViewModel
+    // Un seul manager partagé
+    @StateObject private var workoutManager: WorkoutManager
+    @StateObject private var workoutVM: WorkoutViewModel
+    @StateObject private var statsVM: StatsViewModel
     @Binding var isLoggedIn: Bool
-    
-    init(workoutManager: WorkoutManager, isLoggedIn: Binding<Bool>) {
-        self.workoutManager = workoutManager
+
+    init(isLoggedIn: Binding<Bool>) {
         self._isLoggedIn = isLoggedIn
-        
-        // Initialiser les ViewModels avec le WorkoutManager
-        self._workoutViewModel = StateObject(wrappedValue: WorkoutViewModel(workoutManager: workoutManager))
-        self._statsViewModel = StateObject(wrappedValue: StatsViewModel(workoutManager: workoutManager))
+        // Crée d’abord le manager, puis les VMs
+        let manager = WorkoutManager(dataController: DataController.shared)
+        self._workoutManager = StateObject(wrappedValue: manager)
+        self._workoutVM     = StateObject(wrappedValue: WorkoutViewModel(workoutManager: manager))
+        self._statsVM       = StateObject(wrappedValue: StatsViewModel(workoutManager: manager))
     }
-    
+
     var body: some View {
         TabView {
-            DashboardView(viewModel: workoutViewModel)
+            DashboardView(viewModel: workoutVM)
                 .tabItem {
                     Label("Dashboard", systemImage: "chart.bar.fill")
                 }
-            
-            WorkoutView(viewModel: workoutViewModel)
+
+            WorkoutView(viewModel: workoutVM)
                 .tabItem {
                     Label("Entraînement", systemImage: "figure.run")
                 }
-            
-            StatisticsView(viewModel: statsViewModel)
+
+            StatisticsView(viewModel: statsVM)
                 .tabItem {
                     Label("Statistiques", systemImage: "chart.line.uptrend.xyaxis")
                 }
-            
-            ProfileView(isLoggedIn: $isLoggedIn, workoutManager: workoutManager)
+
+            ProfileView(isLoggedIn: $isLoggedIn)
                 .tabItem {
                     Label("Profil", systemImage: "person.fill")
                 }

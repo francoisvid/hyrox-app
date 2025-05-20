@@ -1,201 +1,114 @@
 // Views/WorkoutView.swift
+
 import SwiftUI
-import CoreData
 
 struct WorkoutView: View {
     @ObservedObject var viewModel: WorkoutViewModel
-    @State private var currentExerciseIndex: Int = 0
-    
+
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 15) {
-                if viewModel.isWorkoutActive {
-                    // Afficher minuteur
-                    HStack {
-                        Text(viewModel.formatTime(viewModel.elapsedTime))
-                            .font(.system(size: 45, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            viewModel.endWorkout()
-                        }) {
-                            Image(systemName: "stop.fill")
-                                .font(.title)
-                                .foregroundColor(.red)
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .clipShape(Circle())
-                        }
-                    }
-                    .padding(.vertical)
-                    
-                    // Afficher l'exercice en cours
-                    if !viewModel.currentExercises.isEmpty {
-                        let currentExercise = viewModel.currentExercises[currentExerciseIndex]
-                        
-                        VStack(spacing: 20) {
-                            // En-tête de l'exercice
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Exercice \(currentExerciseIndex + 1) sur \(viewModel.currentExercises.count)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                
-                                Text(currentExercise.name ?? "Exercice")
-                                    .font(.title)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                
-                                if let description = HyroxConstants.description(for: currentExercise.name ?? "") {
-                                    Text(description)
-                                        .font(.body)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            
-                            // Bouton pour démarrer/terminer l'exercice
-                            Button(action: {
-                                viewModel.selectExercise(currentExercise)
-                            }) {
-                                Text(viewModel.isExerciseCompleted(currentExercise) ? "MODIFIER L'EXERCICE" : "DÉMARRER L'EXERCICE")
-                                    .font(.headline)
-                                    .foregroundColor(.black)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.yellow)
-                                    .cornerRadius(8)
-                            }
-                            
-                            // Bouton suivant (visible uniquement si l'exercice est terminé)
-                            if viewModel.isExerciseCompleted(currentExercise) && currentExerciseIndex < viewModel.currentExercises.count - 1 {
-                                Button(action: {
-                                    withAnimation {
-                                        currentExerciseIndex += 1
-                                    }
-                                }) {
-                                    Text("EXERCICE SUIVANT")
-                                        .font(.headline)
-                                        .foregroundColor(.black)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.green)
-                                        .cornerRadius(8)
-                                }
-                            }
-                            
-                            // Bouton terminer l'entraînement (visible uniquement sur le dernier exercice)
-                            if currentExerciseIndex == viewModel.currentExercises.count - 1 && viewModel.isExerciseCompleted(currentExercise) {
-                                Button(action: {
-                                    viewModel.endWorkout()
-                                }) {
-                                    Text("TERMINER L'ENTRAÎNEMENT")
-                                        .font(.headline)
-                                        .foregroundColor(.black)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.red)
-                                        .cornerRadius(8)
-                                }
-                            }
-                        }
-                    } else {
-                        Text("Chargement des exercices...")
-                            .foregroundColor(.white)
-                    }
+            Group {
+                if viewModel.isActive {
+                    ActiveWorkoutView(viewModel: viewModel)
                 } else {
-                    // Écran de démarrage d'entraînement
-                    VStack(spacing: 30) {
-                        // Aperçu des exercices
-                        VStack(alignment: .leading, spacing: 15) {
-                            Text("Exercices de l'entraînement")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            
-                            ForEach(HyroxConstants.standardExercises.indices, id: \.self) { index in
-                                let exercise = HyroxConstants.standardExercises[index]
-                                HStack {
-                                    Text("\(index + 1).")
-                                        .foregroundColor(.gray)
-                                        .frame(width: 30, alignment: .leading)
-                                    
-                                    Text(exercise.name)
-                                        .foregroundColor(.white)
-                                    
-                                    Spacer()
-                                    
-                                    Text(exercise.description)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
+                    StartWorkoutView(viewModel: viewModel)
+                }
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Entraînement")
+            .navigationBarTitleDisplayMode(.large)
+            // Présentation de la feuille de détail d'exercice
+            .sheet(item: $viewModel.selectedExercise) { exercise in
+                ExerciseDetailView(exercise: exercise, viewModel: viewModel)
+            }
+        }
+    }
+}
+
+// MARK: - Active Workout
+
+private struct ActiveWorkoutView: View {
+    @ObservedObject var viewModel: WorkoutViewModel
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Timer + Stop
+            HStack {
+                Text(viewModel.formatTime(viewModel.elapsedTime))
+                    .font(.system(size: 45, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button {
+                    viewModel.endWorkout()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.title)
+                        .foregroundColor(.red)
                         .padding()
                         .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        
-                        Button(action: {
-                            viewModel.startWorkout()
-                            currentExerciseIndex = 0
-                        }) {
-                            Text("DÉMARRER L'ENTRAÎNEMENT")
-                                .font(.headline)
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.yellow)
-                                .cornerRadius(8)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                        .clipShape(Circle())
                 }
             }
             .padding(.horizontal)
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Entraînement Hyrox")
-            .navigationBarTitleDisplayMode(.large)
-            /** .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Entraînement")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+
+            // Liste des exercices
+            List {
+                ForEach(viewModel.currentExercises, id: \.id) { exercise in
+                    ExerciseRow(
+                        exercise: exercise,
+                        isCurrent: viewModel.isNext(exercise),
+                        duration: viewModel.formatTime(exercise.duration)
+                    ) {
+                        viewModel.select(exercise)
+                    }
                 }
-            }**/
-        }
-        .sheet(item: $viewModel.selectedExercise) { exercise in
-            ExerciseDetailView(exercise: exercise, viewModel: viewModel)
+            }
+            .listStyle(PlainListStyle())
         }
     }
 }
 
-// Extension pour accéder en toute sécurité aux éléments d'un tableau
-extension Array {
-    subscript(safe index: Index) -> Element? {
-        return indices.contains(index) ? self[index] : nil
+private struct ExerciseRow: View {
+    let exercise: Exercise
+    let isCurrent: Bool
+    let duration: String
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack {
+                Text(exercise.name ?? "")
+                    .foregroundColor(isCurrent ? .yellow : .white)
+                Spacer()
+                Text(duration)
+                    .foregroundColor(.white)
+                if isCurrent {
+                    Image(systemName: "play.circle.fill")
+                        .foregroundColor(.yellow)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .listRowBackground(isCurrent ? Color(.systemGray5) : Color.clear)
     }
 }
 
-struct ExerciseDetailView: View {
+private struct ExerciseDetailView: View {
     let exercise: Exercise
     @ObservedObject var viewModel: WorkoutViewModel
+    @Environment(\.presentationMode) var presentationMode
+
     @State private var duration: TimeInterval = 0
     @State private var distance: Double = 0
     @State private var repetitions: Int = 0
     @State private var isTimerRunning = false
     @State private var startTime: Date?
-    @Environment(\.presentationMode) var presentationMode
-    
+
     // Nom de l'exercice avec gestion de nil
     private var exerciseName: String {
-        return exercise.name ?? "Exercice"
+        exercise.name ?? "Exercice"
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -203,35 +116,42 @@ struct ExerciseDetailView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                
+
                 Text(viewModel.formatTime(duration))
                     .font(.system(size: 60, weight: .bold))
                     .foregroundColor(.white)
-                
+
                 HStack(spacing: 40) {
                     timerControls
                 }
                 .padding()
-                
-                // Afficher les champs pertinents en fonction du type d'exercice
+
+                // Afficher les champs pertinents selon le type
                 exerciseFields
-                
+
                 Spacer()
-                
+
                 finishButton
             }
             .padding()
-            .background(Color.black)
-            .navigationBarItems(
-                trailing: Button("Fermer") {
+            .background(Color.black.ignoresSafeArea())
+            .navigationBarItems(trailing:
+                Button("Fermer") {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .foregroundColor(.yellow)
             )
         }
+        .onAppear {
+            // Initialiser les champs depuis l’exercice existant
+            duration = exercise.duration
+            distance = exercise.distance
+            repetitions = Int(exercise.repetitions)
+        }
     }
-    
-    // Boutons de contrôle du timer
+
+    // MARK: - Contrôles du timer
+
     private var timerControls: some View {
         HStack(spacing: 40) {
             Button(action: toggleTimer) {
@@ -242,7 +162,7 @@ struct ExerciseDetailView: View {
                     .background(Color(.systemGray6))
                     .clipShape(Circle())
             }
-            
+
             Button(action: resetTimer) {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.title)
@@ -253,28 +173,25 @@ struct ExerciseDetailView: View {
             }
         }
     }
-    
-    // Champs spécifiques à l'exercice
+
+    // MARK: - Champs de données
+
     @ViewBuilder
     private var exerciseFields: some View {
-        // Vérifier si le nom n'est pas nil
         if let name = exercise.name {
             if ["SkiErg", "RowErg"].contains(name) {
                 distanceField
             }
-            
             if ["Burpees Broad Jump", "Wall Balls"].contains(name) {
                 repetitionsField
             }
         }
     }
-    
-    // Champ de distance
+
     private var distanceField: some View {
         HStack {
             Text("Distance:")
                 .foregroundColor(.white)
-            
             TextField("Mètres", value: $distance, format: .number)
                 .keyboardType(.numberPad)
                 .padding()
@@ -284,13 +201,11 @@ struct ExerciseDetailView: View {
         }
         .padding(.horizontal)
     }
-    
-    // Champ de répétitions
+
     private var repetitionsField: some View {
         HStack {
             Text("Répétitions:")
                 .foregroundColor(.white)
-            
             TextField("Nombre", value: $repetitions, format: .number)
                 .keyboardType(.numberPad)
                 .padding()
@@ -300,11 +215,11 @@ struct ExerciseDetailView: View {
         }
         .padding(.horizontal)
     }
-    
-    // Bouton terminer
+
+    // MARK: - Bouton terminer
+
     private var finishButton: some View {
         Button(action: {
-            // Enregistrer l'exercice
             viewModel.completeExercise(
                 duration: duration,
                 distance: distance,
@@ -322,29 +237,26 @@ struct ExerciseDetailView: View {
         }
         .padding(.horizontal)
     }
-    
-    // Fonctions pour les actions
+
+    // MARK: - Fonctions timer
+
     private func toggleTimer() {
         if isTimerRunning {
-            // Arrêter le timer
             isTimerRunning = false
         } else {
-            // Démarrer le timer
             isTimerRunning = true
             startTime = Date()
             startTimerUpdates()
         }
     }
-    
+
     private func resetTimer() {
-        // Réinitialiser le timer
         duration = 0
         isTimerRunning = false
         startTime = nil
     }
-    
+
     private func startTimerUpdates() {
-        // Timer pour mettre à jour la durée
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
             if isTimerRunning, let start = startTime {
                 duration = Date().timeIntervalSince(start)
@@ -355,14 +267,44 @@ struct ExerciseDetailView: View {
     }
 }
 
-struct WorkoutView_Previews: PreviewProvider {
-    static var previews: some View {
-        let persistenceController = PersistenceController(inMemory: true)
-        let workoutManager = WorkoutManager(persistenceController: persistenceController)
-        let viewModel = WorkoutViewModel(workoutManager: workoutManager)
-        
-        return WorkoutView(viewModel: viewModel)
-            .preferredColorScheme(.dark)
-            .environment(\.managedObjectContext, persistenceController.container.viewContext)
+
+// MARK: - Start Workout
+
+private struct StartWorkoutView: View {
+    @ObservedObject var viewModel: WorkoutViewModel
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Exercices Hyrox")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.top)
+
+            List {
+                ForEach(Array(ExerciseDefinitions.all.values), id: \.name) { def in
+                    HStack {
+                        Text(def.name)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(def.description)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .listStyle(PlainListStyle())
+
+            Button("DÉMARRER L'ENTRAÎNEMENT") {
+                viewModel.startWorkout()
+            }
+            .font(.headline)
+            .foregroundColor(.black)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.yellow)
+            .cornerRadius(8)
+            .padding(.horizontal)
+        }
     }
 }

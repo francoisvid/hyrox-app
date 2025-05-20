@@ -1,140 +1,38 @@
-// Views/DashboardView.swift
 import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var viewModel: WorkoutViewModel
-    
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd MMM"
-        return formatter
-    }()
-    
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(spacing: 24) {
                 Text("Dashboard")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.largeTitle).bold()
                     .foregroundColor(.white)
-                
-                // Utiliser Group pour envelopper le contenu conditionnel
-                Group {
-                    if let lastWorkout = viewModel.workouts.first {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Dernier entraînement")
-                                .font(.headline)
-                                .foregroundColor(.gray)
-                            
-                            HStack {
-                                Text(viewModel.formatTime(lastWorkout.duration))
-                                    .font(.system(size: 45, weight: .bold))
-                                    .foregroundColor(.white)
-                                
-                                Spacer()
-                                
-                                Image(systemName: "lock.fill")
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            Text("\(String(format: "%.2f", lastWorkout.distance)) km")
-                                .foregroundColor(.gray)
-                            
-                            // Temps des exercices
-                            if let exercises = lastWorkout.exercises as? Set<Exercise> {
-                                VStack(spacing: 8) {
-                                    ForEach(Array(exercises.sorted { ($0.name ?? "") < ($1.name ?? "") }), id: \.id) { exercise in
-                                        if let name = exercise.name {
-                                            HStack {
-                                                Text(name)
-                                                    .foregroundColor(.gray)
-                                                    .font(.subheadline)
-                                                Spacer()
-                                                HStack(alignment: .center, spacing: 10) {
-                                                    Text(viewModel.formatTime(exercise.duration))
-                                                        .foregroundColor(.white)
-                                                        .font(.subheadline)
-                                                    if let bestTime = viewModel.getBestTimeForExercise(name: name) {
-                                                        Text((viewModel.formatTime(bestTime)))
-                                                            .foregroundColor(.yellow)
-                                                            .font(.subheadline)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 8)
-                            }
-                            
-                            // Graph
-                            ChartView(data: (lastWorkout.heartRates as? Set<HeartRatePoint> ?? [])
-                                .compactMap { $0.value })
-                                .frame(height: 60)
-                                .padding(.vertical)
-                            
-                            Text(dateFormatter.string(from: lastWorkout.date ?? Date()))
-                                .foregroundColor(.gray)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    } else {
-                        Text("Aucun entraînement récent")
-                            .foregroundColor(.gray)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Dernier entraînement
+                if let workout = viewModel.workouts.first {
+                    WorkoutSummaryView(
+                        workout: workout,
+                        bestTimes:     viewModel.personalBests,
+                        formatTime:    viewModel.formatTime(_:),
+                        chartData:     workout.heartRateArray.map { $0.value }
+                    )
+                } else {
+                    PlaceholderCard(text: "Aucun entraînement récent")
                 }
-                
+
                 // Objectifs
-                Text("Objectifs HYROX")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                // Liste exercices
-                VStack(spacing: 8) {
-                    // Afficher les 3 premiers exercices Hyrox standards
-                    ForEach(0..<min(3, HyroxConstants.standardExercises.count), id: \.self) { index in
-                        let exerciseInfo = HyroxConstants.standardExercises[index]
-                        ExerciseGoalRow(
-                            name: exerciseInfo.name,
-                            goal: viewModel.formatTime(exerciseInfo.targetTime)
-                        )
-                    }
-                    
-                    ExerciseGoalRow(name: "Autres", goal: "Autres")
-                }
-                
-                // Timer actuel - Utiliser Group pour envelopper
-                Group {
-                    if viewModel.isWorkoutActive {
-                        HStack(alignment: .bottom) {
-                            VStack(alignment: .leading) {
-                                Text(viewModel.formatTime(viewModel.elapsedTime))
-                                    .font(.system(size: 45, weight: .bold))
-                                    .foregroundColor(.white)
-                                Text(viewModel.selectedExercise?.name ?? "En cours")
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing) {
-                                Text("--")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(.white)
-                                Text("-- m")
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    }
+                GoalsSectionView(formatTime: viewModel.formatTime(_:))
+
+                // Timer actif
+                if viewModel.isActive {
+                    ActiveTimerView(
+                        elapsedTime: viewModel.elapsedTime,
+                        currentExercise: viewModel.currentExercises.first { viewModel.isNext($0) }?.name ?? "En cours",
+                        formatTime: viewModel.formatTime(_:)
+                    )
                 }
             }
             .padding()
@@ -143,140 +41,162 @@ struct DashboardView: View {
     }
 }
 
-struct ExerciseGoalRow: View {
-    let name: String
-    let goal: String
+// MARK: - Sous-vues
+
+private struct WorkoutSummaryView: View {
+    let workout: Workout
+    let bestTimes: [String: Exercise]
+    let formatTime: (TimeInterval) -> String
+    let chartData: [Double]
+    
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium; f.timeStyle = .short
+        return f
+    }()
     
     var body: some View {
-        HStack {
-            Text(name)
-                .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Dernier entraînement")
+                .font(.headline).foregroundColor(.gray)
             
-            Spacer()
-            
-            if goal != "Autres" {
-                Text("< \(goal)")
-                    .foregroundColor(.yellow)
-            } else {
-                Text(goal)
-                    .foregroundColor(.gray)
+            HStack {
+                Text(formatTime(workout.duration))
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
             }
+            
+            Text("\(String(format: "%.2f", workout.distance)) km")
+                .foregroundColor(.gray)
+            
+            // Liste des exercices et records
+            ForEach(workout.exerciseArray, id: \.id) { ex in
+                HStack {
+                    Text(ex.name ?? "")
+                        .foregroundColor(.gray)
+                        .font(.subheadline)
+                    Spacer()
+                    Text(formatTime(ex.duration))
+                        .foregroundColor(.white)
+                        .font(.subheadline)
+                    if let best = bestTimes[ex.name ?? ""]?.duration {
+                        Text(formatTime(best))
+                            .foregroundColor(.yellow)
+                            .font(.subheadline)
+                    }
+                }
+            }
+            
+            // Graphe fréquence cardiaque
+            ChartView(data: chartData)
+                .frame(height: 60)
+            
+            Text(Self.dateFormatter.string(from: workout.date ?? Date()))
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding()
         .background(Color(.systemGray6))
-        .cornerRadius(8)
+        .cornerRadius(12)
     }
 }
 
-struct ChartView: View {
+// MARK: - ChartView
+
+private struct ChartView: View {
     let data: [Double]
-    
-    private var average: Double {
-        guard !data.isEmpty else { return 0 }
-        return data.reduce(0, +) / Double(data.count)
-    }
-    
-    private var maxValue: Double {
-        data.max() ?? 0
-    }
-    
-    private var minValue: Double {
-        data.min() ?? 0
-    }
-    
+
+    private var average: Double { data.isEmpty ? 0 : data.reduce(0,+)/Double(data.count) }
+    private var maxValue: Double { data.max() ?? 1 }
+    private var minValue: Double { data.min() ?? 0 }
+
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Grille de fond
-                VStack(spacing: 0) {
-                    ForEach(0..<4) { i in
-                        Divider()
-                            .background(Color.gray.opacity(0.3))
-                        Spacer()
-                    }
-                    Divider()
-                        .background(Color.gray.opacity(0.3))
-                }
-                
-                // Ligne moyenne
-                if !data.isEmpty {
-                    let avgY = geometry.size.height * (1 - CGFloat((average - minValue) / (maxValue - minValue)))
-                    Path { path in
-                        path.move(to: CGPoint(x: 0, y: avgY))
-                        path.addLine(to: CGPoint(x: geometry.size.width, y: avgY))
-                    }
-                    .stroke(Color.gray.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                }
-                
-                // Courbe principale
-                Path { path in
-                    let points = normalizedPoints(width: geometry.size.width, height: geometry.size.height)
-                    if !points.isEmpty {
-                        path.move(to: points[0])
-                        for i in 1..<points.count {
-                            path.addLine(to: points[i])
-                        }
-                    }
-                }
-                .stroke(Color.yellow, lineWidth: 2)
-                
-                // Points de données
-                ForEach(0..<data.count, id: \.self) { index in
-                    if index % 5 == 0 { // Afficher un point tous les 5 points pour éviter la surcharge
-                        let point = normalizedPoints(width: geometry.size.width, height: geometry.size.height)[index]
-                        Circle()
-                            .fill(Color.yellow)
-                            .frame(width: 4, height: 4)
-                            .position(point)
-                    }
-                }
-                
-                // Indicateurs de valeurs
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Max: \(Int(maxValue)) bpm")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                    Text("Moy: \(Int(average)) bpm")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                    Text("Min: \(Int(minValue)) bpm")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                .padding(4)
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(4)
-                .position(x: 50, y: 20)
+        GeometryReader { geo in
+            Path { path in
+                let points = normalizedPoints(width: geo.size.width, height: geo.size.height)
+                guard !points.isEmpty else { return }
+                path.move(to: points[0])
+                for pt in points.dropFirst() { path.addLine(to: pt) }
             }
+            .stroke(Color.yellow, lineWidth: 2)
         }
     }
-    
+
     private func normalizedPoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
-        guard !data.isEmpty else { return [] }
-        
-        let minValue = data.min() ?? 0
-        let maxValue = data.max() ?? 1
+        guard data.count > 1 else { return [] }
         let range = maxValue - minValue
-        
-        return (0..<data.count).map { index in
-            let x = width * CGFloat(index) / CGFloat(data.count - 1)
-            let normalizedValue = (data[index] - minValue) / range
-            let y = height * (1 - CGFloat(normalizedValue))
+        return data.enumerated().map { i, v in
+            let x = width * CGFloat(i) / CGFloat(data.count - 1)
+            let y = height * (1 - CGFloat((v - minValue) / range))
             return CGPoint(x: x, y: y)
         }
     }
 }
 
-struct DashboardView_Previews: PreviewProvider {
-    static var previews: some View {
-        let persistenceController = PersistenceController(inMemory: true)
-        persistenceController.createDemoDataIfNeeded()
-        
-        let workoutManager = WorkoutManager(persistenceController: persistenceController)
-        let viewModel = WorkoutViewModel(workoutManager: workoutManager)
-        
-        return DashboardView(viewModel: viewModel)
-            .preferredColorScheme(.dark)
-            .environment(\.managedObjectContext, persistenceController.container.viewContext)
+
+private struct GoalsSectionView: View {
+    let formatTime: (TimeInterval) -> String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Objectifs HYROX")
+                .font(.headline).foregroundColor(.white)
+            
+            ForEach(Array(ExerciseDefinitions.all.values.prefix(3)), id: \.name) { def in
+                HStack {
+                    Text(def.name)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text("< \(formatTime(def.targetTime ?? 0))")
+                        .foregroundColor(.yellow)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+            }
+            
+            HStack {
+                Text("Autres")
+                    .foregroundColor(.white)
+                Spacer()
+                Text("…")
+                    .foregroundColor(.gray)
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
+    }
+}
+
+private struct ActiveTimerView: View {
+    let elapsedTime: TimeInterval
+    let currentExercise: String
+    let formatTime: (TimeInterval) -> String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(formatTime(elapsedTime))
+                .font(.system(size: 42, weight: .bold))
+                .foregroundColor(.white)
+            Text(currentExercise)
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+private struct PlaceholderCard: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .foregroundColor(.gray)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
     }
 }

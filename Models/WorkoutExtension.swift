@@ -1,160 +1,131 @@
+import Foundation
 import CoreData
 
-/// Extension de l'entité Workout pour ajouter des fonctionnalités utiles
 extension Workout {
-    /// Retourne les exercices triés par nom
+    // Ordre standard défini par l’insertion dans ExerciseDefinitions.all
+    private static let standardExerciseOrder = Array(ExerciseDefinitions.all.keys)
+
+    private static let sharedDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    /// Tableau d’exercices triés par nom
     var exerciseArray: [Exercise] {
-        let set = exercises as? Set<Exercise> ?? []
-        return set.sorted { ($0.name ?? "") < ($1.name ?? "") }
+        (exercises as? Set<Exercise> ?? [])
+            .sorted { ($0.name ?? "") < ($1.name ?? "") }
     }
-    
-    /// Retourne les exercices triés selon l'ordre standard Hyrox
+
+    /// Exercices dans l’ordre Hyrox, puis les autres
     var orderedExercises: [Exercise] {
-        let exerciseSet = exercises as? Set<Exercise> ?? []
-        
-        // Création d'un dictionnaire pour retrouver les exercices par nom
-        var exercisesByName: [String: Exercise] = [:]
-        for exercise in exerciseSet {
-            if let name = exercise.name {
-                exercisesByName[name] = exercise
-            }
+        let set = exercises as? Set<Exercise> ?? []
+        let map = Dictionary(uniqueKeysWithValues:
+            set.compactMap { ex in ex.name.map { ($0, ex) } }
+        )
+        var result: [Exercise] = []
+        for name in Workout.standardExerciseOrder {
+            if let ex = map[name] { result.append(ex) }
         }
-        
-        // Tri selon l'ordre standard des exercices Hyrox
-        var orderedResult: [Exercise] = []
-        for exerciseName in HyroxConstants.exerciseNames {
-            if let exercise = exercisesByName[exerciseName] {
-                orderedResult.append(exercise)
-            }
+        for ex in set where !(Workout.standardExerciseOrder.contains(ex.name ?? "")) {
+            result.append(ex)
         }
-        
-        // Ajouter les exercices qui ne sont pas dans l'ordre standard à la fin
-        for exercise in exerciseSet {
-            if let name = exercise.name, !HyroxConstants.exerciseNames.contains(name) {
-                orderedResult.append(exercise)
-            }
-        }
-        
-        return orderedResult
+        return result
     }
-    
-    /// Retourne les données cardiaques triées par timestamp
+
+    /// Points cardiaques triés par date
     var heartRateArray: [HeartRatePoint] {
-        let set = heartRates as? Set<HeartRatePoint> ?? []
-        return set.sorted { ($0.timestamp ?? Date()) < ($1.timestamp ?? Date()) }
+        (heartRates as? Set<HeartRatePoint> ?? [])
+            .sorted { ($0.timestamp ?? Date()) < ($1.timestamp ?? Date()) }
     }
-    
-    /// Retourne la fréquence cardiaque moyenne pendant l'entraînement
+
     var averageHeartRate: Double {
-        let heartRates = heartRateArray
-        guard !heartRates.isEmpty else { return 0 }
-        
-        let sum = heartRates.reduce(0) { $0 + ($1.value) }
-        return sum / Double(heartRates.count)
+        let arr = heartRateArray
+        guard !arr.isEmpty else { return 0 }
+        return arr.reduce(0) { $0 + $1.value } / Double(arr.count)
     }
-    
-    /// Retourne la fréquence cardiaque maximale pendant l'entraînement
+
     var maxHeartRate: Double {
-        return heartRateArray.map { $0.value }.max() ?? 0
+        heartRateArray.map { $0.value }.max() ?? 0
     }
-    
-    /// Retourne la progression globale de l'entraînement (pourcentage d'exercices terminés)
+
     var progressPercentage: Double {
-        let exercises = exerciseArray
-        guard !exercises.isEmpty else { return 0 }
-        
-        let completedCount = exercises.filter { $0.isCompleted }.count
-        return (Double(completedCount) / Double(exercises.count)) * 100
+        let arr = exerciseArray
+        guard !arr.isEmpty else { return 0 }
+        let done = arr.filter { $0.isCompleted }.count
+        return Double(done) / Double(arr.count) * 100
     }
-    
-    /// Retourne un formatage lisible de la durée
+
+    /// Durée affichable
     var formattedDuration: String {
-        return HyroxConstants.formatTime(duration)
+        TimeFormatter.formatTime(duration)
     }
-    
-    /// Retourne une représentation lisible de la date
+
+    /// Date affichable
     var formattedDate: String {
         guard let date = date else { return "Date inconnue" }
-        
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        return Workout.sharedDateFormatter.string(from: date)
     }
-    
-    /// Crée un nouvel entraînement
+
     static func create(name: String, date: Date, in context: NSManagedObjectContext) -> Workout {
-        let workout = Workout(context: context)
-        workout.id = UUID()
-        workout.name = name
-        workout.date = date
-        workout.completed = false
-        workout.duration = 0
-        workout.distance = 0
-        
-        return workout
+        let w = Workout(context: context)
+        w.id = UUID()
+        w.name = name
+        w.date = date
+        w.completed = false
+        w.duration = 0
+        w.distance = 0
+        return w
     }
-    
-    /// Ajoute un exercice à l'entraînement
+
     func addExercise(name: String) -> Exercise {
-        guard let context = self.managedObjectContext else {
-            fatalError("No managed object context found")
+        guard let ctx = managedObjectContext else {
+            fatalError("No managed object context")
         }
-        
-        let exercise = Exercise(context: context)
-        exercise.id = UUID()
-        exercise.name = name
-        exercise.workout = self
-        exercise.duration = 0
-        exercise.distance = 0
-        exercise.repetitions = 0
-        exercise.personalBest = false
-        
-        // Établir la relation bidirectionnelle
-        var exercisesSet = self.exercises as? Set<Exercise> ?? Set<Exercise>()
-        exercisesSet.insert(exercise)
-        self.exercises = exercisesSet as NSSet
-        
-        return exercise
+        let ex = Exercise(context: ctx)
+        ex.id = UUID()
+        ex.name = name
+        ex.workout = self
+        ex.duration = 0
+        ex.distance = 0
+        ex.repetitions = 0
+        ex.personalBest = false
+        return ex
     }
-    
-    /// Ajoute des données cardiaques à l'entraînement
+
     func addHeartRate(value: Double, timestamp: Date) -> HeartRatePoint {
-        guard let context = self.managedObjectContext else {
-            fatalError("No managed object context found")
+        guard let ctx = managedObjectContext else {
+            fatalError("No managed object context")
         }
-        
-        let heartRate = HeartRatePoint(context: context)
-        heartRate.id = UUID()
-        heartRate.value = value
-        heartRate.timestamp = timestamp
-        heartRate.workout = self
-        
-        return heartRate
+        let hr = HeartRatePoint(context: ctx)
+        hr.id = UUID()
+        hr.value = value
+        hr.timestamp = timestamp
+        hr.workout = self
+        return hr
     }
-    
-    /// Finalise l'entraînement avec les données complètes
+
     func finish(duration: Double, distance: Double) {
-        self.completed = true
+        completed = true
         self.duration = duration
         self.distance = distance
-        self.endDate = Date()
+        endDate = Date()
     }
-    
-    /// Trouve un exercice spécifique par son nom
+
+    /// Exercice par nom
     func findExercise(named exerciseName: String) -> Exercise? {
-        guard let exercises = self.exercises as? Set<Exercise> else { return nil }
-        return exercises.first { $0.name == exerciseName }
+        (exercises as? Set<Exercise>)?.first { $0.name == exerciseName }
     }
-    
-    /// Calcule le temps total en excluant les pauses
+
+    /// Temps effectif (sans pauses)
     var effectiveWorkoutTime: TimeInterval {
-        return exerciseArray.reduce(0) { $0 + $1.duration }
+        exerciseArray.reduce(0) { $0 + $1.duration }
     }
-    
-    /// Calcule le temps de pause (différence entre durée totale et temps effectif)
+
+    /// Durée des pauses
     var pauseTime: TimeInterval {
-        let effective = effectiveWorkoutTime
-        return duration > effective ? duration - effective : 0
+        let eff = effectiveWorkoutTime
+        return duration > eff ? duration - eff : 0
     }
 }
