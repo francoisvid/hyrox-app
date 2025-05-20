@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var viewModel: WorkoutViewModel
+    @Environment(\.managedObjectContext) private var viewContext
 
     var body: some View {
         ScrollView {
@@ -15,9 +16,8 @@ struct DashboardView: View {
                 if let workout = viewModel.workouts.first {
                     WorkoutSummaryView(
                         workout: workout,
-                        bestTimes:     viewModel.personalBests,
-                        formatTime:    viewModel.formatTime(_:),
-                        chartData:     workout.heartRateArray.map { $0.value }
+                        bestTimes: viewModel.personalBests,
+                        formatTime: viewModel.formatTime(_:)
                     )
                 } else {
                     PlaceholderCard(text: "Aucun entraînement récent")
@@ -42,6 +42,9 @@ struct DashboardView: View {
             .padding()
         }
         .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            viewModel.reloadWorkouts()
+        }
     }
 }
 
@@ -51,7 +54,6 @@ private struct WorkoutSummaryView: View {
     let workout: Workout
     let bestTimes: [String: Exercise]
     let formatTime: (TimeInterval) -> String
-    let chartData: [Double]
     
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -71,11 +73,14 @@ private struct WorkoutSummaryView: View {
                 Spacer()
             }
             
-            Text("\(String(format: "%.2f", workout.distance)) km")
-                .foregroundColor(.gray)
+            // Distance (seulement si disponible)
+            if workout.distance > 0 {
+                Text("\(String(format: "%.2f", workout.distance / 1000)) km")
+                    .foregroundColor(.gray)
+            }
             
             // Liste des exercices et records
-            ForEach(workout.exerciseArray, id: \.id) { ex in
+            ForEach(workout.exerciseArray.sorted(by: { ($0.date ?? Date()) < ($1.date ?? Date()) }), id: \.id) { ex in
                 HStack {
                     Text(ex.name ?? "")
                         .foregroundColor(.gray)
@@ -84,18 +89,20 @@ private struct WorkoutSummaryView: View {
                     Text(formatTime(ex.duration))
                         .foregroundColor(.white)
                         .font(.subheadline)
-                    if let best = bestTimes[ex.name ?? ""]?.duration {
+                    if let best = bestTimes[ex.name ?? ""]?.duration, best > 0 {
                         Text(formatTime(best))
                             .foregroundColor(.yellow)
                             .font(.subheadline)
                     }
                 }
+                .padding(.vertical, 2)
             }
             
-            // Graphe fréquence cardiaque
-            ChartView(data: chartData)
-                .frame(height: 60)
+            Divider()
+                .background(Color.gray.opacity(0.5))
+                .padding(.vertical, 4)
             
+            // Date du workout
             Text(Self.dateFormatter.string(from: workout.date ?? Date()))
                 .foregroundColor(.gray)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -147,29 +154,38 @@ private struct GoalsSectionView: View {
             Text("Objectifs HYROX")
                 .font(.headline).foregroundColor(.white)
             
-            ForEach(Array(ExerciseDefinitions.all.values.prefix(3)), id: \.name) { def in
+            ForEach(Array(ExerciseDefinitions.all.values.prefix(4)), id: \.name) { def in
                 HStack {
                     Text(def.name)
                         .foregroundColor(.white)
                     Spacer()
-                    Text("< \(formatTime(def.targetTime ?? 0))")
-                        .foregroundColor(.yellow)
+                    if let targetTime = def.targetTime, targetTime > 0 {
+                        Text("< \(formatTime(targetTime))")
+                            .foregroundColor(.yellow)
+                    } else {
+                        Text("--:--")
+                            .foregroundColor(.gray)
+                    }
                 }
                 .padding()
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
             }
             
-            HStack {
-                Text("Autres")
-                    .foregroundColor(.white)
-                Spacer()
-                Text("…")
-                    .foregroundColor(.gray)
+            Button(action: {
+                // Action pour voir tous les objectifs
+            }) {
+                HStack {
+                    Text("Voir tous les objectifs")
+                        .foregroundColor(.white)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.gray)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
             }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
         }
     }
 }
@@ -192,6 +208,7 @@ private struct ActiveTimerView: View {
         .cornerRadius(12)
     }
 }
+
 
 private struct PlaceholderCard: View {
     let text: String
