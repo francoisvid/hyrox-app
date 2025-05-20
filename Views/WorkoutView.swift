@@ -221,6 +221,7 @@ private struct ExerciseDetailView: View {
     private var finishButton: some View {
         Button(action: {
             viewModel.completeExercise(
+                exercise: exercise,
                 duration: duration,
                 distance: distance,
                 repetitions: repetitions

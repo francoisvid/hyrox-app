@@ -30,7 +30,11 @@ struct DashboardView: View {
                 if viewModel.isActive {
                     ActiveTimerView(
                         elapsedTime: viewModel.elapsedTime,
-                        currentExercise: viewModel.currentExercises.first { viewModel.isNext($0) }?.name ?? "En cours",
+                        currentExercise: viewModel.currentExercises
+                            .first { exercise in
+                                viewModel.isNext(exercise)
+                            }?
+                            .name ?? "En cours",
                         formatTime: viewModel.formatTime(_:)
                     )
                 }

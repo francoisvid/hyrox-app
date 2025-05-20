@@ -63,7 +63,12 @@ final class WorkoutManager: ObservableObject {
                 if let t = def.targetTime { ex.targetTime = t }
             }
             do {
+                // Sauvegarder le contexte
                 DataController.shared.saveContext()
+                
+                // Synchroniser le workout
+                DataSyncManager.shared.sendWorkout(workout)
+                
                 DispatchQueue.main.async {
                     self.currentWorkout = workout
                     self.isWorkoutActive = true
@@ -78,11 +83,20 @@ final class WorkoutManager: ObservableObject {
 
     func endWorkout() {
         guard let workout = currentWorkout, let start = startTime else { return }
+        
         let duration = Date().timeIntervalSince(start)
         let totalDistance = (workout.exercises as? Set<Exercise>)?
             .reduce(0) { $0 + $1.distance } ?? 0
+        
         workout.finish(duration: duration, distance: totalDistance)
+        
+        // Sauvegarder le contexte
         DataController.shared.saveContext()
+        
+        // Synchroniser le workout après qu'il soit terminé
+        DataSyncManager.shared.sendWorkout(workout)
+        
+        // Le reste de votre code reste inchangé
         loadWorkouts()
         updatePersonalBests()
         currentWorkout = nil

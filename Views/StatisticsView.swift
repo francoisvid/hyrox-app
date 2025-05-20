@@ -4,7 +4,10 @@ import SwiftUI
 
 struct StatisticsView: View {
     @ObservedObject var viewModel: StatsViewModel
+    @ObservedObject var wvm: WorkoutViewModel
     @State private var showDeleteAllAlert = false
+    @State private var debugMessage: String = ""
+    @State private var showDebug: Bool = false
 
     private static let longDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -86,6 +89,25 @@ struct StatisticsView: View {
                     .padding(8)
                     .background(Color(.systemGray6))
                     .clipShape(Circle())
+            }
+        }
+    }
+    
+    func clearAllData() {
+        debugMessage = "Suppression de toutes les données..."
+        showDebug = true
+        
+        // Appeler la méthode de DataController
+        DataController.shared.clearAllData()
+        
+        // Recharger les données dans le ViewModel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.wvm.reloadWorkouts()
+            self.debugMessage = "✅ Toutes les données ont été effacées"
+            
+            // Masquer le message après quelques secondes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.showDebug = false
             }
         }
     }

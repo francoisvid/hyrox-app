@@ -30,7 +30,7 @@ struct MainTabView: View {
                     Label("Entraînement", systemImage: "figure.run")
                 }
 
-            StatisticsView(viewModel: statsVM)
+            StatisticsView(viewModel: statsVM, wvm: workoutVM)
                 .tabItem {
                     Label("Statistiques", systemImage: "chart.line.uptrend.xyaxis")
                 }

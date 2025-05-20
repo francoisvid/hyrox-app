@@ -21,7 +21,7 @@ class WorkoutViewModel: ObservableObject {
     init(workoutManager: WorkoutManager) {
         self.workoutManager = workoutManager
 
-        // Observe workout state and elapsed time
+        // Observer l'état courant, l'activation et le temps écoulé
         Publishers.CombineLatest3(
             workoutManager.$currentWorkout,
             workoutManager.$isWorkoutActive,
@@ -31,14 +31,14 @@ class WorkoutViewModel: ObservableObject {
         .sink { [weak self] workout, active, elapsed in
             guard let self = self else { return }
             self.isActive = active
-            self.elapsedTime = elapsed
+            self.elapsedTime     = elapsed
 
             if active, let w = workout {
                 self.currentExercises = w.orderedExercises
                 self.updateProgress(for: w)
             } else {
                 self.currentExercises = []
-                self.workoutProgress = 0
+                self.workoutProgress  = 0
             }
         }
         .store(in: &cancellables)
@@ -47,32 +47,51 @@ class WorkoutViewModel: ObservableObject {
     // MARK: - Actions
     func startWorkout() {
         workoutManager.startNewWorkout()
+        saveAndSync(workoutManager.currentWorkout)
     }
 
     func endWorkout() {
         workoutManager.endWorkout()
+        saveAndSync()
     }
 
-    func select(_ exercise: Exercise) {
-        selectedExercise = exercise
-        isEditingExercise = true
+    func reloadWorkouts() {
+        workoutManager.loadWorkouts()
+    }
+    
+    func saveAndSync(_ workout: Workout? = nil) {
+        // Sauvegarder dans Core Data
+        DataController.shared.saveContext()
+        
+        // Synchroniser avec l'autre appareil
+        if let workout = workout {
+            // Si un workout spécifique est fourni
+            DataSyncManager.shared.sendWorkout(workout)
+        } else if let currentWorkout = workoutManager.currentWorkout {
+            // Utiliser le workout actuel du manager
+            DataSyncManager.shared.sendWorkout(currentWorkout)
+        }
+    }
+    
+    func completeExercise(exercise: Exercise, duration: TimeInterval, distance: Double, repetitions: Int) {
+        exercise.duration = duration
+        exercise.distance = distance
+        exercise.repetitions = Int16(repetitions)
+        
+        // Sauvegarder et synchroniser le workout parent
+        if let workout = exercise.workout {
+            saveAndSync(workout)
+        } else {
+            DataController.shared.saveContext()
+        }
     }
 
-    func completeExercise(duration: TimeInterval,
-                          distance: Double = 0,
-                          repetitions: Int = 0) {
-        guard let ex = selectedExercise else { return }
-        workoutManager.updateExercise(
-            id: ex.id ?? UUID(),
-            duration: duration,
-            distance: distance,
-            repetitions: Int16(repetitions)
-        )
-        selectedExercise = nil
-        isEditingExercise = false
+    // MARK: - Helpers
+
+    func isExerciseCompleted(_ exercise: Exercise) -> Bool {
+        return exercise.duration > 0
     }
 
-    // MARK: - Progress
     private func updateProgress(for workout: Workout) {
         let exercises = workout.orderedExercises
         guard !exercises.isEmpty else {
@@ -83,39 +102,27 @@ class WorkoutViewModel: ObservableObject {
         workoutProgress = Double(done) / Double(exercises.count) * 100
     }
 
-    // MARK: - Helpers
-    func isNext(_ exercise: Exercise) -> Bool {
-        guard let workout = workoutManager.currentWorkout else { return false }
-        let next = workout.orderedExercises.first { $0.duration <= 0 }
-        return exercise.id == next?.id
-    }
-
-    var estimatedRemainingTime: TimeInterval {
-        guard let workout = workoutManager.currentWorkout else { return 0 }
-        return workout.orderedExercises
-            .filter { $0.duration <= 0 }
-            .reduce(0) { $0 + ($1.targetTime) }
-    }
-
-    var estimatedTotalTime: TimeInterval {
-        guard let workout = workoutManager.currentWorkout else { return 0 }
-        let done = workout.orderedExercises
-            .filter { $0.duration > 0 }
-            .reduce(0) { $0 + $1.duration }
-        return done + estimatedRemainingTime
+    func formatTime(_ seconds: TimeInterval) -> String {
+        TimeFormatter.formatTime(seconds)
     }
     
-    /// Liste de tous les workouts (directement depuis le manager)
+    func select(_ exercise: Exercise) {
+        selectedExercise   = exercise
+        isEditingExercise  = true
+    }
+    
+    func isNext(_ exercise: Exercise) -> Bool {
+        guard let workout = workoutManager.currentWorkout else { return false }
+        return workout.orderedExercises.first(where: { $0.duration <= 0 })?.id == exercise.id
+    }
+
+    // MARK: - Exposés pour la Watch
+
     var workouts: [Workout] {
         workoutManager.workouts
     }
 
-    /// Records personnels (idem)
     var personalBests: [String: Exercise] {
         workoutManager.personalBests
-    }
-    
-    func formatTime(_ seconds: TimeInterval) -> String {
-        TimeFormatter.formatTime(seconds)
     }
 }
