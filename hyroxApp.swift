@@ -8,6 +8,7 @@ struct HyroxApp: App {
 
     init() {
         dataController.createDemoDataIfNeeded()
+        _ = DataController.shared
     }
 
     var body: some Scene {

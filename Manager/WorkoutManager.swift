@@ -63,7 +63,7 @@ final class WorkoutManager: ObservableObject {
                 if let t = def.targetTime { ex.targetTime = t }
             }
             do {
-                try context.save()
+                DataController.shared.saveContext()
                 DispatchQueue.main.async {
                     self.currentWorkout = workout
                     self.isWorkoutActive = true
@@ -82,7 +82,7 @@ final class WorkoutManager: ObservableObject {
         let totalDistance = (workout.exercises as? Set<Exercise>)?
             .reduce(0) { $0 + $1.distance } ?? 0
         workout.finish(duration: duration, distance: totalDistance)
-        dataController.save()
+        DataController.shared.saveContext()
         loadWorkouts()
         updatePersonalBests()
         currentWorkout = nil
@@ -108,7 +108,7 @@ final class WorkoutManager: ObservableObject {
                 let intensity = min(50, self.elapsedTime / 60)
                 let hr = baseHR + intensity + Double.random(in: -5...5)
                 _ = workout.addHeartRate(value: hr, timestamp: Date())
-                self.dataController.save()
+                DataController.shared.saveContext()
             }
     }
 
@@ -126,7 +126,7 @@ final class WorkoutManager: ObservableObject {
             let ex = exercises.first(where: { $0.id == id })
         else { return }
         ex.updatePerformance(duration: duration, distance: distance, repetitions: repetitions)
-        dataController.save()
+        DataController.shared.saveContext()
     }
 
     func deleteWorkout(_ workout: Workout) {
@@ -134,7 +134,7 @@ final class WorkoutManager: ObservableObject {
         context.perform {
             context.delete(workout)
             do {
-                try context.save()
+                DataController.shared.saveContext()
                 DispatchQueue.main.async {
                     self.loadWorkouts()
                     self.updatePersonalBests()
@@ -152,7 +152,7 @@ final class WorkoutManager: ObservableObject {
             let delete = NSBatchDeleteRequest(fetchRequest: req)
             do {
                 try context.execute(delete)
-                try context.save()
+                DataController.shared.saveContext()
                 DispatchQueue.main.async {
                     self.loadWorkouts()
                     self.updatePersonalBests()

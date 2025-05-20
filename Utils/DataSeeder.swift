@@ -41,7 +41,7 @@ enum DataSeeder {
         seedHeartRates(for: workout2, in: context)
 
         do {
-            try context.save()
+            DataController.shared.saveContext()
             print("DataSeeder – données initiales créées")
         } catch {
             print("DataSeeder – échec du save : \(error)")
