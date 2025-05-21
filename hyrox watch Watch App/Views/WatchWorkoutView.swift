@@ -469,9 +469,10 @@ struct WatchWorkoutView: View {
             }
         }
         
-        // Recharger les données dans le ViewModel
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Forcer la mise à jour du ViewModel et de la vue
+        DispatchQueue.main.async {
             self.viewModel.reloadWorkouts()
+            self.viewModel.objectWillChange.send() // Force la mise à jour de la vue
             self.debugMessage = "✅ Toutes les données ont été effacées"
             
             // Masquer le message après quelques secondes

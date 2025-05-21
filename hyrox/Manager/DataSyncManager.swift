@@ -71,7 +71,9 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         // Préparer les données des exercices associés
         var exercisesData: [[String: Any]] = []
         if let exercises = workout.exercises?.allObjects as? [Exercise] {
-            for exercise in exercises {
+            // Utiliser l'ordre standard des exercices
+            let orderedExercises = workout.orderedExercises
+            for exercise in orderedExercises {
                 guard let exerciseID = exercise.id?.uuidString else { continue }
                 
                 var exData: [String: Any] = [

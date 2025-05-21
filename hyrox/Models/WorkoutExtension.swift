@@ -30,16 +30,34 @@ extension Workout {
     /// Exercices dans l'ordre Hyrox, puis les autres
     public var orderedExercises: [Exercise] {
         let set = exercises as? Set<Exercise> ?? []
-        let map = Dictionary(uniqueKeysWithValues:
-            set.compactMap { ex in ex.name.map { ($0, ex) } }
-        )
+        
+        // Créer un dictionnaire en gardant le plus récent exercice pour chaque nom
+        var map: [String: Exercise] = [:]
+        for ex in set {
+            if let name = ex.name {
+                if let existing = map[name] {
+                    // Si l'exercice existant est plus ancien, on le remplace
+                    if let existingDate = existing.date,
+                       let newDate = ex.date,
+                       newDate > existingDate {
+                        map[name] = ex
+                    }
+                } else {
+                    map[name] = ex
+                }
+            }
+        }
+        
         var result: [Exercise] = []
+        // Ajouter d'abord les exercices dans l'ordre standard
         for name in Workout.standardExerciseOrder {
-            if let ex = map[name] { result.append(ex) }
+            if let ex = map[name] {
+                result.append(ex)
+                map.removeValue(forKey: name)
+            }
         }
-        for ex in set where !(Workout.standardExerciseOrder.contains(ex.name ?? "")) {
-            result.append(ex)
-        }
+        // Ajouter les exercices restants
+        result.append(contentsOf: map.values)
         return result
     }
 

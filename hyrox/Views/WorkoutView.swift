@@ -282,16 +282,18 @@ private struct StartWorkoutView: View {
                 .padding(.top)
 
             List {
-                ForEach(Array(ExerciseDefinitions.all.values), id: \.name) { def in
-                    HStack {
-                        Text(def.name)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text(def.description)
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                ForEach(Workout.standardExerciseOrder, id: \.self) { name in
+                    if let def = ExerciseDefinitions.all[name] {
+                        HStack {
+                            Text(def.name)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text(def.description)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
             }
             .listStyle(PlainListStyle())
@@ -306,6 +308,7 @@ private struct StartWorkoutView: View {
             .background(Color.yellow)
             .cornerRadius(8)
             .padding(.horizontal)
+            .padding(.bottom)
         }
     }
 }

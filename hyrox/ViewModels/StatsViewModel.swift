@@ -42,7 +42,7 @@ class StatsViewModel: ObservableObject {
     private static func computeBests(from workouts: [Workout]) -> [String: Exercise] {
         var bests: [String: Exercise] = [:]
         for w in workouts where w.completed {
-            for ex in w.exerciseArray {
+            for ex in w.orderedExercises {
                 guard let name = ex.name, ex.duration > 0 else { continue }
                 if let current = bests[name] {
                     if ex.duration < current.duration { bests[name] = ex }

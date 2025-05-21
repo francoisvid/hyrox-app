@@ -320,7 +320,18 @@ private struct HistorySectionView: View {
                 if let name = $0.name { set.insert(name) }
             }
         }
-        return set.sorted()
+        // Utiliser l'ordre standard des exercices
+        var result: [String] = []
+        for name in Workout.standardExerciseOrder {
+            if set.contains(name) {
+                result.append(name)
+            }
+        }
+        // Ajouter les exercices non standards à la fin
+        for name in set.sorted() where !Workout.standardExerciseOrder.contains(name) {
+            result.append(name)
+        }
+        return result
     }
 
     private func history(for name: String) -> [(Exercise, Date)] {
