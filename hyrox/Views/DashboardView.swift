@@ -195,13 +195,8 @@ private struct GoalsSectionView: View {
     
     // Trier les exercices selon l'ordre standard
     private var sortedExercises: [ExerciseDefinition] {
-        let standardOrder = Workout.standardExerciseOrder
-        return ExerciseDefinitions.all.values.sorted { def1, def2 in
-            guard let index1 = standardOrder.firstIndex(of: def1.name),
-                  let index2 = standardOrder.firstIndex(of: def2.name) else {
-                return def1.name < def2.name
-            }
-            return index1 < index2
+        Workout.standardExerciseOrder.compactMap { name in
+            ExerciseDefinitions.all[name]
         }
     }
     

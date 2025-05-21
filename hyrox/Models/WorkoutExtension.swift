@@ -2,8 +2,17 @@ import Foundation
 import CoreData
 
 extension Workout {
-    // Ordre standard défini par l'insertion dans ExerciseDefinitions.all
-    public static let standardExerciseOrder = Array(ExerciseDefinitions.all.keys)
+    // Ordre standard fixe des exercices
+    public static let standardExerciseOrder = [
+        "SkiErg",
+        "Sled Push",
+        "Sled Pull",
+        "Burpees Broad Jump",
+        "RowErg",
+        "Farmers Carry",
+        "Sandbag Lunges",
+        "Wall Balls"
+    ]
 
     private static let sharedDateFormatter: DateFormatter = {
         let f = DateFormatter()

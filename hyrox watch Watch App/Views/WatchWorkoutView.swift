@@ -151,8 +151,9 @@ struct WatchWorkoutView: View {
     private var activeWorkoutView: some View {
         VStack(spacing: 15) {
             Text(viewModel.formatTime(viewModel.elapsedTime))
-                .font(.title2).bold()
+                .font(.system(size: 32, weight: .bold, design: .monospaced))
                 .foregroundColor(Color.white)
+                .frame(width: 120)
             
             Button("Arrêter") {
                 viewModel.endWorkout()
@@ -432,8 +433,7 @@ struct WatchWorkoutView: View {
     private func formatTimeWithMilliseconds(_ time: TimeInterval) -> String {
         let m = Int(time) / 60
         let s = Int(time) % 60
-        let cs = Int((time.truncatingRemainder(dividingBy: 1)) * 100)
-        return String(format: "%02d:%02d.%02d", m, s, cs)
+        return String(format: "%02d:%02d", m, s)
     }
     
     private func getTimeColor(current: TimeInterval, goal: TimeInterval) -> Color {
@@ -456,6 +456,18 @@ struct WatchWorkoutView: View {
         
         // Appeler la méthode de DataController
         DataController.shared.clearAllData()
+        
+        // Envoyer un message de synchronisation pour informer l'iPhone
+        let message: [String: Any] = [
+            "action": "clearAllData",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.activationState == .activated {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("❌ Erreur lors de l'envoi du message de suppression:", error)
+            }
+        }
         
         // Recharger les données dans le ViewModel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

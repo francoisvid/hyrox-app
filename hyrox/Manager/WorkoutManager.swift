@@ -58,10 +58,15 @@ final class WorkoutManager: ObservableObject {
         let context = dataController.container.viewContext
         context.perform {
             let workout = Workout.create(name: name, date: Date(), in: context)
-            for (exName, def) in ExerciseDefinitions.all {
-                let ex = workout.addExercise(name: exName)
-                if let t = def.targetTime { ex.targetTime = t }
+            
+            // Utiliser l'ordre standard des exercices
+            for exerciseName in Workout.standardExerciseOrder {
+                if let def = ExerciseDefinitions.all[exerciseName] {
+                    let ex = workout.addExercise(name: exerciseName)
+                    if let t = def.targetTime { ex.targetTime = t }
+                }
             }
+            
             do {
                 // Sauvegarder le contexte
                 DataController.shared.saveContext()

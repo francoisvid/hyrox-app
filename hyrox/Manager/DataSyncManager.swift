@@ -242,7 +242,22 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         }
     }
     
-    func session(_ session: WCSession, didReceiveMessage message: [String:Any]) {
+    func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
+        print("📱 Message reçu de la Watch:", message)
+        
+        // Vérifier si c'est un message de suppression
+        if let action = message["action"] as? String, action == "clearAllData" {
+            print("📱 Suppression de toutes les données demandée par la Watch")
+            DataController.shared.clearAllData()
+            return
+        }
+        
+        // Traitement normal des messages de synchronisation
+        guard let history = message["history"] as? [[String: Any]] else {
+            print("❌ Format de message invalide")
+            return
+        }
+        
         print("📥 Message reçu sans replyHandler, clés:", message.keys)
         
         if message["test"] != nil {
