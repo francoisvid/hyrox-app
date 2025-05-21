@@ -32,7 +32,7 @@ struct HyroxApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SplashScreenView()
                 .environment(\.managedObjectContext,
                               dataController.container.viewContext)
                 .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
