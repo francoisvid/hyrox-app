@@ -81,6 +81,11 @@ private struct ProfileHeaderView: View {
                 Circle()
                     .fill(Color(.secondarySystemBackground))
                     .frame(width: 80, height: 80)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.yellow, lineWidth: 4)
+                    )
                     .overlay(
                         Text(vm.username.prefix(1).uppercased())
                             .font(.system(size: 30, weight: .bold))

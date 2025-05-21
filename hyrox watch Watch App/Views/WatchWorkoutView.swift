@@ -56,7 +56,7 @@ struct WatchWorkoutView: View {
 
     private var startWorkoutView: some View {
         VStack(spacing: 15) {
-            Text("MyHyrox")
+            Text("MyROX")
                 .font(.title2).bold()
                 .foregroundColor(Color.white)
             

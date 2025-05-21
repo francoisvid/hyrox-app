@@ -118,10 +118,16 @@ struct LoginView: View {
 private struct LogoView: View {
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: "figure.run.circle.fill")
+            Image("logo_myrox")
                 .resizable().frame(width: 80, height: 80)
                 .foregroundColor(.yellow)
-            Text("MyHyrox")
+                .frame(width: 100, height: 100)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.yellow, lineWidth: 4)
+                )
+            Text("MyROX")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(.white)
             Text("Entraînez-vous. Suivez et Progressez")
