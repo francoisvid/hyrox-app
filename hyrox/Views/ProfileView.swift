@@ -117,7 +117,7 @@ private struct ActivitySummaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Résumé d’activité")
+            Text("Résumé d'activité")
                 .font(.headline)
                 .foregroundColor(.white)
 
@@ -219,4 +219,8 @@ private struct ActivityStatCard: View {
         .background(Color.black.opacity(0.3))
         .cornerRadius(8)
     }
+}
+
+#Preview {
+    ProfileView(isLoggedIn: .constant(true))
 }

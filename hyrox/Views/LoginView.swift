@@ -60,41 +60,41 @@ struct LoginView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 32) {
-                LogoView()
+            ScrollView {
+                VStack(spacing: 32) {
+                    LogoView()
 
-                ModeToggleView(isRegistering: $vm.isRegistering, action: vm.toggleMode)
+                    ModeToggleView(isRegistering: $vm.isRegistering, action: vm.toggleMode)
 
-                CredentialsFormView(
-                    email: $vm.email,
-                    password: $vm.password,
-                    rememberMe: $vm.rememberMe,
-                    isRegistering: vm.isRegistering,
-                    isValid: vm.isFormValid
-                )
-                .focused($focusedField, equals: .email)
+                    CredentialsFormView(
+                        email: $vm.email,
+                        password: $vm.password,
+                        rememberMe: $vm.rememberMe,
+                        isRegistering: vm.isRegistering,
+                        isValid: vm.isFormValid
+                    )
+                    .focused($focusedField, equals: .email)
 
-                Button(action: vm.submit) {
-                    Text(vm.isRegistering ? "Créer un compte" : "Se connecter")
-                        .font(.headline)
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(vm.isFormValid ? Color.yellow : Color.yellow.opacity(0.5))
-                        .cornerRadius(8)
+                    Button(action: vm.submit) {
+                        Text(vm.isRegistering ? "Créer un compte" : "Se connecter")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(vm.isFormValid ? Color.yellow : Color.yellow.opacity(0.5))
+                            .cornerRadius(8)
+                    }
+                    .disabled(!vm.isFormValid || vm.isLoading)
+
+                    SocialLoginButtonsView()
+
+                    Text("En vous connectant, vous acceptez nos Conditions d'utilisation.")
+                        .font(.caption).foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
                 }
-                .disabled(!vm.isFormValid || vm.isLoading)
-
-                SocialLoginButtonsView()
-
-                Spacer()
-
-                Text("En vous connectant, vous acceptez nos Conditions d'utilisation…")
-                    .font(.caption).foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+                .padding()
             }
-            .padding()
 
             if vm.isLoading {
                 LoadingOverlayView()
@@ -300,4 +300,8 @@ extension Color {
                   blue: Double(b)/255,
                   opacity: Double(a)/255)
     }
+}
+
+#Preview {
+    LoginView()
 }

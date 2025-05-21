@@ -28,35 +28,38 @@ struct StatisticsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
-                PeriodPickerView(
-                    periods: periods,
-                    selectedIndex: $viewModel.selectedPeriodIndex
-                )
-
-                StatsChartView(data: viewModel.chartData, formatter: Self.shortDateFormatter)
-                    .padding(12)
-                    .frame(height: 250)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-
-                HistorySectionView(
-                    workouts: viewModel.workouts,
-                    personalBests: viewModel.personalBests,
-                    formatter: { Self.longDateFormatter.string(from: $0) },
-                    onDelete: viewModel.deleteWorkout
-                )
-
-                let comp = viewModel.comparison()
-                if let prev = comp.previous, let latest = comp.latest {
-                    ComparisonSectionView(
-                        previous: prev,
-                        latest: latest,
-                        longFormatter: Self.longDateFormatter,
-                        shortFormatter: Self.shortDateFormatter,
-                        formatTime: viewModel.formatTime(_:)
+                if viewModel.workouts.isEmpty {
+                    NoDataView()
+                } else {
+                    PeriodPickerView(
+                        periods: periods,
+                        selectedIndex: $viewModel.selectedPeriodIndex
                     )
-                }
 
+                    StatsChartView(data: viewModel.chartData, formatter: Self.shortDateFormatter)
+                        .padding(12)
+                        .frame(height: 250)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+
+                    HistorySectionView(
+                        workouts: viewModel.workouts,
+                        personalBests: viewModel.personalBests,
+                        formatter: { Self.longDateFormatter.string(from: $0) },
+                        onDelete: viewModel.deleteWorkout
+                    )
+
+                    let comp = viewModel.comparison()
+                    if let prev = comp.previous, let latest = comp.latest {
+                        ComparisonSectionView(
+                            previous: prev,
+                            latest: latest,
+                            longFormatter: Self.longDateFormatter,
+                            shortFormatter: Self.shortDateFormatter,
+                            formatTime: viewModel.formatTime(_:)
+                        )
+                    }
+                }
             }
             .padding()
         }
@@ -449,7 +452,7 @@ private struct ComparisonSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Comparaison d’entraînements")
+            Text("Comparaison d'entraînements")
                 .font(.title3).bold()
                 .foregroundColor(.white)
 
@@ -499,4 +502,39 @@ private struct ComparisonSectionView: View {
             Divider().background(Color.gray.opacity(0.5))
         }
     }
+}
+
+// MARK: - No Data View
+
+private struct NoDataView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            
+            Text("Aucune donnée disponible")
+                .font(.title2)
+                .foregroundColor(.white)
+            
+            Text("Commencez à vous entraîner pour voir vos statistiques")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+#Preview {
+    let context = DataController.shared.container.viewContext
+    let workoutManager = WorkoutManager(dataController: DataController.shared)
+    let viewModel = WorkoutViewModel(workoutManager: workoutManager)
+    let statsViewModel = StatsViewModel(workoutManager: workoutManager)
+    
+    return StatisticsView(viewModel: statsViewModel, wvm: viewModel)
+        .environment(\.managedObjectContext, context)
 }

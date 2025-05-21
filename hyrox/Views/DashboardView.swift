@@ -30,17 +30,17 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Dernier entraînement
-                if let workout = viewModel.workouts.first {
+                if viewModel.workouts.isEmpty {
+                    NoDataView()
+                } else if let workout = viewModel.workouts.first {
                     WorkoutSummaryView(
                         workout: workout,
                         bestTimes: viewModel.personalBests,
                         formatTime: viewModel.formatTime(_:)
                     )
-                } else {
-                    PlaceholderCard(text: "Aucun entraînement récent")
                 }
 
-                // Objectifs
+                // Objectifs (toujours affichés)
                 GoalsSectionView(formatTime: viewModel.formatTime(_:))
 
                 // Timer actif
@@ -62,6 +62,30 @@ struct DashboardView: View {
         .onAppear {
             viewModel.reloadWorkouts()
         }
+    }
+}
+
+// MARK: - No Data View
+
+private struct NoDataView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "figure.run.circle")
+                .font(.system(size: 40))
+                .foregroundColor(.gray)
+            
+            Text("Commencez votre premier entraînement")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Text("Vos statistiques apparaîtront ici")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
     }
 }
 
@@ -268,12 +292,24 @@ private struct ActiveTimerView: View {
 
 private struct PlaceholderCard: View {
     let text: String
+    
     var body: some View {
-        Text(text)
-            .foregroundColor(.gray)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+        VStack {
+            Text(text)
+                .foregroundColor(.gray)
+                .padding()
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
     }
+}
+
+#Preview {
+    let context = DataController.shared.container.viewContext
+    let workoutManager = WorkoutManager(dataController: DataController.shared)
+    let viewModel = WorkoutViewModel(workoutManager: workoutManager)
+    
+    return DashboardView(viewModel: viewModel)
+        .environment(\.managedObjectContext, context)
 }

@@ -11,7 +11,7 @@ struct MainTabView: View {
 
     init(isLoggedIn: Binding<Bool>) {
         self._isLoggedIn = isLoggedIn
-        // Crée d’abord le manager, puis les VMs
+        // Crée d'abord le manager, puis les VMs
         let manager = WorkoutManager(dataController: DataController.shared)
         self._workoutManager = StateObject(wrappedValue: manager)
         self._workoutVM     = StateObject(wrappedValue: WorkoutViewModel(workoutManager: manager))
@@ -43,4 +43,8 @@ struct MainTabView: View {
         .accentColor(.yellow)
         .preferredColorScheme(.dark)
     }
+}
+
+#Preview {
+    MainTabView(isLoggedIn: .constant(true))
 }

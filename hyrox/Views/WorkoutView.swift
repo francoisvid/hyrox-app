@@ -143,7 +143,7 @@ private struct ExerciseDetailView: View {
             )
         }
         .onAppear {
-            // Initialiser les champs depuis l’exercice existant
+            // Initialiser les champs depuis l'exercice existant
             duration = exercise.duration
             distance = exercise.distance
             repetitions = Int(exercise.repetitions)
@@ -308,4 +308,13 @@ private struct StartWorkoutView: View {
             .padding(.horizontal)
         }
     }
+}
+
+#Preview {
+    let context = DataController.shared.container.viewContext
+    let workoutManager = WorkoutManager(dataController: DataController.shared)
+    let viewModel = WorkoutViewModel(workoutManager: workoutManager)
+    
+    return WorkoutView(viewModel: viewModel)
+        .environment(\.managedObjectContext, context)
 }
