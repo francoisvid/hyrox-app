@@ -63,49 +63,52 @@ private struct ProfileHeaderView: View {
     @State private var draft    = ""
 
     var body: some View {
-        HStack(spacing: 15) {
-            Circle()
-                .fill(Color(.systemGray6))
-                .frame(width: 80, height: 80)
-                .overlay(
-                    Text(vm.username.prefix(1).uppercased())
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(.yellow)
-                )
+        VStack(spacing: 15) {
+            HStack(spacing: 15) {
+                Circle()
+                    .fill(Color(.systemGray6))
+                    .frame(width: 80, height: 80)
+                    .overlay(
+                        Text(vm.username.prefix(1).uppercased())
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundColor(.yellow)
+                    )
 
-            VStack(alignment: .leading, spacing: 4) {
-                if editing {
-                    HStack {
-                        TextField("Nom d'utilisateur", text: $draft)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .foregroundColor(.white)
-                        Button("Enregistrer") {
-                            if !draft.isEmpty {
-                                vm.saveUsername(draft)
+                VStack(alignment: .leading, spacing: 4) {
+                    if editing {
+                        HStack {
+                            TextField("Nom d'utilisateur", text: $draft)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                            Button("Enregistrer") {
+                                if !draft.isEmpty {
+                                    vm.saveUsername(draft)
+                                }
+                                editing = false
                             }
-                            editing = false
+                            .foregroundColor(.yellow)
                         }
-                        .foregroundColor(.yellow)
-                    }
-                } else {
-                    HStack {
-                        Text(vm.username)
-                            .font(.title2).bold()
-                            .foregroundColor(.white)
-                        Button {
-                            draft = vm.username
-                            editing = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .foregroundColor(.yellow)
+                    } else {
+                        HStack {
+                            Text(vm.username)
+                                .font(.title2).bold()
+                                .foregroundColor(.white)
+                            Button {
+                                draft = vm.username
+                                editing = true
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .foregroundColor(.yellow)
+                            }
                         }
+                        Text(vm.email)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
                     }
-                    Text(vm.email)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
@@ -123,16 +126,17 @@ private struct ActivitySummaryView: View {
 
             HStack(spacing: 10) {
                 ActivityStatCard(title: "Entraînements",
-                                 value: "\(vm.totalWorkouts)",
-                                 icon: "figure.run")
+                               value: "\(vm.totalWorkouts)",
+                               icon: "figure.run")
                 ActivityStatCard(title: "Temps total",
-                                 value: TimeFormatter.formatTime(vm.totalDuration),
-                                 icon: "clock")
+                               value: TimeFormatter.formatTime(vm.totalDuration),
+                               icon: "clock")
                 ActivityStatCard(title: "Distance",
-                                 value: String(format: "%.1f km", vm.totalDistance),
-                                 icon: "arrow.left.and.right")
+                               value: String(format: "%.1f km", vm.totalDistance),
+                               icon: "arrow.left.and.right")
             }
         }
+        .frame(maxWidth: .infinity)
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
@@ -215,6 +219,7 @@ private struct ActivityStatCard: View {
                 .font(.caption).foregroundColor(.gray)
         }
         .frame(maxWidth: .infinity)
+        .frame(height: 100)
         .padding()
         .background(Color.black.opacity(0.3))
         .cornerRadius(8)
