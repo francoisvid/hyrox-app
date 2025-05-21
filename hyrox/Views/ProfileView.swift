@@ -4,6 +4,7 @@ import Combine
 struct ProfileView: View {
     @Binding var isLoggedIn: Bool
     @StateObject private var vm = ProfileViewModel()
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ScrollView {
@@ -14,13 +15,14 @@ struct ProfileView: View {
                 LogoutButton(isLoggedIn: $isLoggedIn)
                 Text("Version 1.0.0")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .padding(.top)
             }
             .padding()
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle("Profil")
+        .preferredColorScheme(vm.isDarkModeEnabled ? .dark : .light)
     }
 }
 
@@ -33,7 +35,7 @@ class ProfileViewModel: ObservableObject {
     @AppStorage("isHeartRateMonitoringEnabled") var isHeartRateMonitoringEnabled = true
     @AppStorage("selectedWeightUnit")            var selectedWeightUnit            = 0
     @AppStorage("selectedDistanceUnit")          var selectedDistanceUnit          = 0
-    @Published var isDarkModeEnabled = true
+    @AppStorage("isDarkModeEnabled")             var isDarkModeEnabled             = true
 
     // On initialise le manager directement ici
     private let manager = WorkoutManager(dataController: DataController.shared)
@@ -53,6 +55,16 @@ class ProfileViewModel: ObservableObject {
         username = newName
         UserDefaults.standard.set(newName, forKey: "username")
     }
+    
+    func toggleDarkMode() {
+        isDarkModeEnabled.toggle()
+        // Forcer le changement de mode
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            windowScene.windows.forEach { window in
+                window.overrideUserInterfaceStyle = isDarkModeEnabled ? .dark : .light
+            }
+        }
+    }
 }
 
 // MARK: - Subviews
@@ -61,12 +73,13 @@ private struct ProfileHeaderView: View {
     @ObservedObject var vm: ProfileViewModel
     @State private var editing = false
     @State private var draft    = ""
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(spacing: 15) {
             HStack(spacing: 15) {
                 Circle()
-                    .fill(Color(.systemGray6))
+                    .fill(Color(.secondarySystemBackground))
                     .frame(width: 80, height: 80)
                     .overlay(
                         Text(vm.username.prefix(1).uppercased())
@@ -79,7 +92,7 @@ private struct ProfileHeaderView: View {
                         HStack {
                             TextField("Nom d'utilisateur", text: $draft)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                             Button("Enregistrer") {
                                 if !draft.isEmpty {
                                     vm.saveUsername(draft)
@@ -92,7 +105,7 @@ private struct ProfileHeaderView: View {
                         HStack {
                             Text(vm.username)
                                 .font(.title2).bold()
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                             Button {
                                 draft = vm.username
                                 editing = true
@@ -103,26 +116,27 @@ private struct ProfileHeaderView: View {
                         }
                         Text(vm.email)
                             .font(.subheadline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
     }
 }
 
 private struct ActivitySummaryView: View {
     @ObservedObject var vm: ProfileViewModel
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Résumé d'activité")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
 
             HStack(spacing: 10) {
                 ActivityStatCard(title: "Entraînements",
@@ -138,26 +152,27 @@ private struct ActivitySummaryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
     }
 }
 
 private struct SettingsView: View {
     @ObservedObject var vm: ProfileViewModel
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("Paramètres")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
 
             Toggle("Monitoring cardiaque", isOn: $vm.isHeartRateMonitoringEnabled)
                 .toggleStyle(SwitchToggleStyle(tint: .yellow))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
 
             VStack(alignment: .leading) {
-                Text("Unité de poids").foregroundColor(.white)
+                Text("Unité de poids").foregroundColor(.primary)
                 Picker("", selection: $vm.selectedWeightUnit) {
                     Text("kg").tag(0)
                     Text("lb").tag(1)
@@ -166,7 +181,7 @@ private struct SettingsView: View {
             }
 
             VStack(alignment: .leading) {
-                Text("Unité de distance").foregroundColor(.white)
+                Text("Unité de distance").foregroundColor(.primary)
                 Picker("", selection: $vm.selectedDistanceUnit) {
                     Text("m").tag(0)
                     Text("km").tag(1)
@@ -177,11 +192,13 @@ private struct SettingsView: View {
 
             Toggle("Mode sombre", isOn: $vm.isDarkModeEnabled)
                 .toggleStyle(SwitchToggleStyle(tint: .yellow))
-                .foregroundColor(.white)
-                .disabled(true)
+                .foregroundColor(.primary)
+                .onChange(of: vm.isDarkModeEnabled) { _ in
+                    vm.toggleDarkMode()
+                }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
     }
 }
@@ -208,20 +225,21 @@ private struct ActivityStatCard: View {
     let title: String
     let value: String
     let icon: String
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title2).foregroundColor(.yellow)
             Text(value)
-                .font(.title3).bold().foregroundColor(.white)
+                .font(.title3).bold().foregroundColor(.primary)
             Text(title)
-                .font(.caption).foregroundColor(.gray)
+                .font(.caption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 100)
         .padding()
-        .background(Color.black.opacity(0.3))
+        .background(Color(.tertiarySystemBackground))
         .cornerRadius(8)
     }
 }

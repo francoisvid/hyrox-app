@@ -7,6 +7,7 @@ import WatchConnectivity
 @main
 struct HyroxApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("isDarkModeEnabled") private var isDarkModeEnabled = true
     
     // Initialisation explicite
     private let dataController = DataController.shared
@@ -34,6 +35,7 @@ struct HyroxApp: App {
             ContentView()
                 .environment(\.managedObjectContext,
                               dataController.container.viewContext)
+                .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
                 .onChange(of: scenePhase) { newPhase in
                     if newPhase == .active {
                         print("📱 Application devenue active")
