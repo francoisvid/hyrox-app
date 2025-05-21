@@ -1,4 +1,66 @@
 import SwiftUI
+import CoreData
+
+// Définition d'une structure pour les événements
+struct HyroxEvent: Identifiable {
+    let id = UUID()
+    let imageName: String
+    let locationCode: String
+    let name: String
+    let dateRange: String
+    let registrationURL: URL?
+}
+
+// Vue pour afficher une carte d'événement
+private struct EventCardView: View {
+    let event: HyroxEvent
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(event.imageName)
+                .resizable()
+                .scaledToFit()
+                .cornerRadius(12)
+                .opacity(0.8)
+                .overlay(alignment: .topLeading) {
+                    Text(event.locationCode)
+                        .font(.caption).bold()
+                        .foregroundColor(.white)
+                        .padding(4)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(4)
+                        .padding(8)
+                }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.name)
+                    .font(.headline).bold()
+                    .foregroundColor(.white)
+                Text(event.dateRange)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal)
+            
+            // Bouton d'inscription
+            if let url = event.registrationURL {
+                Link(destination: url) {
+                    Text("S'INSCRIRE !")
+                        .font(.caption).bold()
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.yellow)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.bottom)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
 
 class GoalsViewModel: ObservableObject {
     @Published var goals: [String: TimeInterval] = [:]
@@ -21,6 +83,24 @@ struct DashboardView: View {
     @ObservedObject var viewModel: WorkoutViewModel
     @Environment(\.managedObjectContext) private var viewContext
 
+    // Liste fictive des prochains événements
+    private let upcomingEvents: [HyroxEvent] = [
+        HyroxEvent(
+            imageName: "hyrox_prs", // Assurez-vous que ces images sont dans vos Assets
+            locationCode: "PAR",
+            name: "FITNESS PARK HYROX PARIS",
+            dateRange: "23. Oct. 2025 – 26. Oct. 2025",
+            registrationURL: URL(string: "https://hyroxfrance.com/fr/trouve-ta-course/?filter_region=france") // Remplacez par l'URL réelle
+        ),
+        HyroxEvent(
+            imageName: "hyrox_bdx", // Assurez-vous que ces images sont dans vos Assets
+            locationCode: "BDX",
+            name: "HYROX BORDEAUX",
+            dateRange: "20. Nov. 2025 – 23. Nov. 2025",
+            registrationURL: URL(string: "https://hyroxfrance.com/fr/trouve-ta-course/?filter_region=france") // Remplacez par l'URL réelle
+        )
+    ]
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -40,8 +120,16 @@ struct DashboardView: View {
                     )
                 }
 
-                // Objectifs (toujours affichés)
-                GoalsSectionView(formatTime: viewModel.formatTime(_:))
+                // Section des prochains événements
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Prochains Événements HYROX France")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    ForEach(upcomingEvents) { event in
+                        EventCardView(event: event)
+                    }
+                }
 
                 // Timer actif
                 if viewModel.isActive {

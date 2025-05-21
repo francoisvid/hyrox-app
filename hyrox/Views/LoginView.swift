@@ -175,6 +175,15 @@ private struct CredentialsFormView: View {
     
     var body: some View {
         VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "info.circle")
+                    .imageScale(.large)
+                    .foregroundStyle(
+                        Color(.yellow)
+                    )
+                Text("Aucune inscription n'est nécessaire pour le moment, cliquez sur \"Se connecter\"")
+                    .font(.system(size: 14))
+            }
             // Email
             VStack(alignment: .leading, spacing: 4) {
                 Text("Email").font(.caption).foregroundColor(.gray)

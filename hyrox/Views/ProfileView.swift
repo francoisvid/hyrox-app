@@ -11,6 +11,7 @@ struct ProfileView: View {
             VStack(spacing: 20) {
                 ProfileHeaderView(vm: vm)
                 ActivitySummaryView(vm: vm)
+                GoalsSectionView(formatTime: vm.formatTime)
                 SettingsView(vm: vm)
                 LogoutButton(isLoggedIn: $isLoggedIn)
                 Text("Version 0.1")
@@ -51,6 +52,12 @@ class ProfileViewModel: ObservableObject {
         manager.workouts.reduce(0) { $0 + $1.distance }
     }
 
+    func formatTime(_ time: TimeInterval) -> String {
+        let m = Int(time) / 60
+        let s = Int(time) % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+
     func saveUsername(_ newName: String) {
         username = newName
         UserDefaults.standard.set(newName, forKey: "username")
@@ -63,6 +70,90 @@ class ProfileViewModel: ObservableObject {
             windowScene.windows.forEach { window in
                 window.overrideUserInterfaceStyle = isDarkModeEnabled ? .dark : .light
             }
+        }
+    }
+}
+
+// MARK: - Goals Section
+
+private struct GoalsSectionView: View {
+    let formatTime: (TimeInterval) -> String
+    @StateObject private var viewModel = GoalsViewModel()
+    @State private var editingGoal: String? = nil
+    @State private var newGoalMinutes: Double = 0
+    
+    // Trier les exercices selon l'ordre standard
+    private var sortedExercises: [ExerciseDefinition] {
+        Workout.standardExerciseOrder.compactMap { name in
+            ExerciseDefinitions.all[name]
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Objectifs HYROX")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            ForEach(sortedExercises, id: \.name) { def in
+                HStack {
+                    Text(def.name)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if editingGoal == def.name {
+                        HStack(spacing: 4) {
+                            TextField("Minutes", value: $newGoalMinutes, format: .number)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .frame(width: 80)
+                            Text("min")
+                                .foregroundColor(.secondary)
+                        }
+                        .onSubmit {
+                            // Convertir les minutes en secondes
+                            let seconds = newGoalMinutes * 60
+                            viewModel.setGoal(for: def.name, targetTime: seconds)
+                            editingGoal = nil
+                        }
+                    } else {
+                        let currentGoal = viewModel.goals[def.name] ?? 0
+                        if currentGoal > 0 {
+                            Text("< \(formatTime(currentGoal))")
+                                .foregroundColor(.yellow)
+                        } else {
+                            Text("--:--")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Button(action: {
+                        if editingGoal == def.name {
+                            // Convertir les minutes en secondes
+                            let seconds = newGoalMinutes * 60
+                            viewModel.setGoal(for: def.name, targetTime: seconds)
+                            editingGoal = nil
+                        } else {
+                            editingGoal = def.name
+                            // Convertir les secondes en minutes
+                            newGoalMinutes = (viewModel.goals[def.name] ?? 0) / 60
+                        }
+                    }) {
+                        Image(systemName: editingGoal == def.name ? "checkmark.circle" : "pencil.circle")
+                            .foregroundColor(.yellow)
+                    }
+                }
+                .padding()
+                .background(Color(.tertiarySystemBackground))
+                .cornerRadius(8)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .onAppear {
+            viewModel.refreshGoals()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("GoalsUpdated"))) { _ in
+            viewModel.refreshGoals()
         }
     }
 }
