@@ -86,7 +86,7 @@ struct LoginView: View {
                     }
                     .disabled(!vm.isFormValid || vm.isLoading)
 
-                    SocialLoginButtonsView()
+                    //SocialLoginButtonsView()
 
                     Text("En vous connectant, vous acceptez nos Conditions d'utilisation.")
                         .font(.caption).foregroundColor(.gray)

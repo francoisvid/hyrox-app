@@ -13,7 +13,7 @@ struct ProfileView: View {
                 ActivitySummaryView(vm: vm)
                 SettingsView(vm: vm)
                 LogoutButton(isLoggedIn: $isLoggedIn)
-                Text("Version 1.0.0")
+                Text("Version 0.1")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.top)
@@ -175,6 +175,7 @@ private struct SettingsView: View {
             Toggle("Monitoring cardiaque", isOn: $vm.isHeartRateMonitoringEnabled)
                 .toggleStyle(SwitchToggleStyle(tint: .yellow))
                 .foregroundColor(.primary)
+                .disabled(true)
 
             VStack(alignment: .leading) {
                 Text("Unité de poids").foregroundColor(.primary)
@@ -220,7 +221,7 @@ private struct LogoutButton: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.red.opacity(0.8))
+                .background(Color.red)
                 .cornerRadius(12)
         }
     }
