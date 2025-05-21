@@ -121,7 +121,7 @@ private struct LogoView: View {
             Image(systemName: "figure.run.circle.fill")
                 .resizable().frame(width: 80, height: 80)
                 .foregroundColor(.yellow)
-            Text("HYROX")
+            Text("MyHyrox")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(.white)
             Text("Entraînez-vous. Suivez et Progressez")
