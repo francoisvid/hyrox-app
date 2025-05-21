@@ -72,6 +72,11 @@ class GoalsManager {
             name: NSNotification.Name("GoalsUpdated"),
             object: nil
         )
+        
+        // Envoyer les objectifs à l'autre appareil
+        #if os(iOS)
+        DataSyncManager.shared.sendGoals()
+        #endif
     }
     
     // Récupérer tous les objectifs

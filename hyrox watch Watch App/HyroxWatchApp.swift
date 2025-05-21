@@ -9,6 +9,17 @@ struct HyroxWatchApp: App {
     
     init() {
         print("⌚️ Initialisation de l'application Watch")
+        
+        // Activer la session explicitement
+        if WCSession.isSupported() {
+            print("⌚️ WCSession est supporté sur la Watch")
+            if WCSession.default.activationState != .activated {
+                print("⌚️ Tentative d'activation de WCSession")
+                WCSession.default.delegate = syncManager
+                WCSession.default.activate()
+            }
+        }
+        
         print("⌚️ DataSyncManager initialisé")
     }
     

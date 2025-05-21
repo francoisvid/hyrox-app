@@ -1,6 +1,7 @@
 import CoreData
 
 extension Exercise {
+    
     /// Marque cet exercice comme record personnel
     func setAsPersonalBest() {
         personalBest = true

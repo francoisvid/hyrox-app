@@ -2,7 +2,7 @@ import Foundation
 import CoreData
 import WatchConnectivity
 
-final class DataSyncManager: NSObject, WCSessionDelegate {
+final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     static let shared = DataSyncManager()
     
     // Pour stocker le dernier token d'historique
@@ -207,6 +207,10 @@ final class DataSyncManager: NSObject, WCSessionDelegate {
         
         #if os(iOS)
         print("📱 iOS - isReachable: \(session.isReachable), isPaired: \(session.isPaired), isWatchAppInstalled: \(session.isWatchAppInstalled)")
+        // Envoyer les objectifs dès que la session est activée
+        if session.isReachable {
+            sendGoals()
+        }
         #else
         print("⌚️ watchOS - isReachable: \(session.isReachable), isCompanionAppInstalled: \(session.isCompanionAppInstalled)")
         #endif
@@ -248,6 +252,25 @@ final class DataSyncManager: NSObject, WCSessionDelegate {
         
         if message["history"] != nil {
             processReceivedMessage(message)
+        }
+        
+        if let type = message["type"] as? String {
+            switch type {
+            case "goals":
+                if let goals = message["goals"] as? [String: Double] {
+                    print("📥 Objectifs reçus: \(goals.count) exercices")
+                    #if os(watchOS)
+                    GoalsManager.shared.processReceivedGoals(goals)
+                    #else
+                    // Sur iOS, on met à jour le cache
+                    for (name, time) in goals {
+                        GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+                    }
+                    #endif
+                }
+            default:
+                break
+            }
         }
     }
     
@@ -410,6 +433,21 @@ final class DataSyncManager: NSObject, WCSessionDelegate {
             }
         } catch {
             print("❌ Erreur lors du traitement de l'exercice:", error)
+        }
+    }
+    
+    // Envoyer les objectifs à l'autre appareil
+    func sendGoals() {
+        guard WCSession.default.activationState == .activated else { return }
+        
+        let goals = GoalsManager.shared.getAllGoals()
+        let message: [String: Any] = [
+            "type": "goals",
+            "goals": goals
+        ]
+        
+        WCSession.default.sendMessage(message, replyHandler: nil) { error in
+            print("❌ Erreur envoi objectifs: \(error.localizedDescription)")
         }
     }
     

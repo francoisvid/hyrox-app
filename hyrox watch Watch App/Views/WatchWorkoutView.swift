@@ -180,6 +180,16 @@ struct WatchWorkoutView: View {
                 .minimumScaleFactor(0.8)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+            
+            // Afficher l'objectif
+            if let name = exercise.name {
+                let goal = GoalsManager.shared.getGoalFor(exerciseName: name)
+                if goal > 0 {
+                    Text("Objectif: \(formatTime(goal))")
+                        .font(.caption)
+                        .foregroundColor(Color.yellow)
+                }
+            }
 
             if viewModel.isExerciseCompleted(exercise) {
                 Text("✓ Terminé")
@@ -256,9 +266,33 @@ struct WatchWorkoutView: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
 
-            Text(formatTime(exerciseDuration))
-                .font(.title).bold()
-                .foregroundColor(Color.white)
+            // Afficher le temps actuel avec la couleur appropriée
+            if let name = exercise.name {
+                let goal = GoalsManager.shared.getGoalFor(exerciseName: name)
+                if goal > 0 {
+                    VStack(spacing: 4) {
+                        Text(formatTimeWithMilliseconds(exerciseDuration))
+                            .font(.title).bold()
+                            .foregroundColor(getTimeColor(current: exerciseDuration, goal: goal))
+                        
+                        Text("Objectif: \(formatTime(goal))")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
+                        
+                        // Afficher la différence
+                        let difference = exerciseDuration - goal
+                        if difference != 0 {
+                            Text(difference > 0 ? "+\(formatTime(difference))" : formatTime(difference))
+                                .font(.caption)
+                                .foregroundColor(difference > 0 ? .red : .green)
+                        }
+                    }
+                } else {
+                    Text(formatTimeWithMilliseconds(exerciseDuration))
+                        .font(.title).bold()
+                        .foregroundColor(.white)
+                }
+            }
 
             HStack(spacing: 15) {
                 Button(action: toggleTimer) {
@@ -392,8 +426,26 @@ struct WatchWorkoutView: View {
     private func formatTime(_ time: TimeInterval) -> String {
         let m = Int(time) / 60
         let s = Int(time) % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+    
+    private func formatTimeWithMilliseconds(_ time: TimeInterval) -> String {
+        let m = Int(time) / 60
+        let s = Int(time) % 60
         let cs = Int((time.truncatingRemainder(dividingBy: 1)) * 100)
         return String(format: "%02d:%02d.%02d", m, s, cs)
+    }
+    
+    private func getTimeColor(current: TimeInterval, goal: TimeInterval) -> Color {
+        let percentage = current / goal
+        switch percentage {
+        case ..<0.8:  // Moins de 80% du temps objectif
+            return .green
+        case 0.8..<1.0:  // Entre 80% et 100% du temps objectif
+            return .orange
+        default:  // Plus de 100% du temps objectif
+            return .red
+        }
     }
     
     // TODO : TEST

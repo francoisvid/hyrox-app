@@ -64,6 +64,7 @@
 				CoreData/DataController.swift,
 				CoreData/hyrox.xcdatamodeld,
 				Manager/DataSyncManager.swift,
+				Manager/GoalsManager.swift,
 				Manager/WorkoutManager.swift,
 				Models/ExerciseExtension.swift,
 				Models/WorkoutExtension.swift,

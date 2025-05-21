@@ -2,8 +2,8 @@ import Foundation
 import CoreData
 
 extension Workout {
-    // Ordre standard défini par l’insertion dans ExerciseDefinitions.all
-    private static let standardExerciseOrder = Array(ExerciseDefinitions.all.keys)
+    // Ordre standard défini par l'insertion dans ExerciseDefinitions.all
+    public static let standardExerciseOrder = Array(ExerciseDefinitions.all.keys)
 
     private static let sharedDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -12,14 +12,14 @@ extension Workout {
         return f
     }()
 
-    /// Tableau d’exercices triés par nom
+    /// Tableau d'exercices triés par nom
     var exerciseArray: [Exercise] {
         (exercises as? Set<Exercise> ?? [])
             .sorted { ($0.name ?? "") < ($1.name ?? "") }
     }
 
-    /// Exercices dans l’ordre Hyrox, puis les autres
-    var orderedExercises: [Exercise] {
+    /// Exercices dans l'ordre Hyrox, puis les autres
+    public var orderedExercises: [Exercise] {
         let set = exercises as? Set<Exercise> ?? []
         let map = Dictionary(uniqueKeysWithValues:
             set.compactMap { ex in ex.name.map { ($0, ex) } }

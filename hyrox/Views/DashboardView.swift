@@ -1,5 +1,22 @@
 import SwiftUI
 
+class GoalsViewModel: ObservableObject {
+    @Published var goals: [String: TimeInterval] = [:]
+    
+    init() {
+        refreshGoals()
+    }
+    
+    func refreshGoals() {
+        goals = GoalsManager.shared.getAllGoals()
+    }
+    
+    func setGoal(for exerciseName: String, targetTime: TimeInterval) {
+        GoalsManager.shared.setGoalFor(exerciseName: exerciseName, targetTime: targetTime)
+        refreshGoals()
+    }
+}
+
 struct DashboardView: View {
     @ObservedObject var viewModel: WorkoutViewModel
     @Environment(\.managedObjectContext) private var viewContext
@@ -148,22 +165,70 @@ private struct ChartView: View {
 
 private struct GoalsSectionView: View {
     let formatTime: (TimeInterval) -> String
+    @StateObject private var viewModel = GoalsViewModel()
+    @State private var editingGoal: String? = nil
+    @State private var newGoalMinutes: Double = 0
+    
+    // Trier les exercices selon l'ordre standard
+    private var sortedExercises: [ExerciseDefinition] {
+        let standardOrder = Workout.standardExerciseOrder
+        return ExerciseDefinitions.all.values.sorted { def1, def2 in
+            guard let index1 = standardOrder.firstIndex(of: def1.name),
+                  let index2 = standardOrder.firstIndex(of: def2.name) else {
+                return def1.name < def2.name
+            }
+            return index1 < index2
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Objectifs HYROX")
                 .font(.headline).foregroundColor(.white)
             
-            ForEach(Array(ExerciseDefinitions.all.values.prefix(4)), id: \.name) { def in
+            ForEach(sortedExercises, id: \.name) { def in
                 HStack {
                     Text(def.name)
                         .foregroundColor(.white)
                     Spacer()
-                    if let targetTime = def.targetTime, targetTime > 0 {
-                        Text("< \(formatTime(targetTime))")
-                            .foregroundColor(.yellow)
+                    if editingGoal == def.name {
+                        HStack(spacing: 4) {
+                            TextField("Minutes", value: $newGoalMinutes, format: .number)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .frame(width: 80)
+                            Text("min")
+                                .foregroundColor(.gray)
+                        }
+                        .onSubmit {
+                            // Convertir les minutes en secondes
+                            let seconds = newGoalMinutes * 60
+                            viewModel.setGoal(for: def.name, targetTime: seconds)
+                            editingGoal = nil
+                        }
                     } else {
-                        Text("--:--")
+                        let currentGoal = viewModel.goals[def.name] ?? 0
+                        if currentGoal > 0 {
+                            Text("< \(formatTime(currentGoal))")
+                                .foregroundColor(.yellow)
+                        } else {
+                            Text("--:--")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    Button(action: {
+                        if editingGoal == def.name {
+                            // Convertir les minutes en secondes
+                            let seconds = newGoalMinutes * 60
+                            viewModel.setGoal(for: def.name, targetTime: seconds)
+                            editingGoal = nil
+                        } else {
+                            editingGoal = def.name
+                            // Convertir les secondes en minutes
+                            newGoalMinutes = (viewModel.goals[def.name] ?? 0) / 60
+                        }
+                    }) {
+                        Image(systemName: editingGoal == def.name ? "checkmark.circle" : "pencil.circle")
                             .foregroundColor(.gray)
                     }
                 }
@@ -171,21 +236,12 @@ private struct GoalsSectionView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
             }
-            
-            Button(action: {
-                // Action pour voir tous les objectifs
-            }) {
-                HStack {
-                    Text("Voir tous les objectifs")
-                        .foregroundColor(.white)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.gray)
-                }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-            }
+        }
+        .onAppear {
+            viewModel.refreshGoals()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("GoalsUpdated"))) { _ in
+            viewModel.refreshGoals()
         }
     }
 }

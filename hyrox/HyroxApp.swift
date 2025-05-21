@@ -26,7 +26,7 @@ struct HyroxApp: App {
         }
         
         // Seed / load Core Data
-        dataController.createDemoDataIfNeeded()
+        // dataController.createDemoDataIfNeeded()
     }
 
     var body: some Scene {
