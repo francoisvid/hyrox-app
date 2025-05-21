@@ -228,6 +228,22 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
             return
         }
         
+        // Traiter les messages d'objectifs
+        if let type = message["type"] as? String, type == "goals",
+           let goals = message["goals"] as? [String: Double] {
+            print("📥 Objectifs reçus: \(goals.count) exercices")
+            #if os(watchOS)
+            GoalsManager.shared.processReceivedGoals(goals)
+            #else
+            // Sur iOS, on met à jour le cache
+            for (name, time) in goals {
+                GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+            }
+            #endif
+            replyHandler(["status": "received", "type": "goals_acknowledgement"])
+            return
+        }
+        
         // Traiter les messages d'historique
         if let history = message["history"] as? [[String: Any]] {
             print("📥 Historique reçu avec \(history.count) changements")
@@ -254,6 +270,21 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
             return
         }
         
+        // Traiter les messages d'objectifs
+        if let type = message["type"] as? String, type == "goals",
+           let goals = message["goals"] as? [String: Double] {
+            print("📥 Objectifs reçus: \(goals.count) exercices")
+            #if os(watchOS)
+            GoalsManager.shared.processReceivedGoals(goals)
+            #else
+            // Sur iOS, on met à jour le cache
+            for (name, time) in goals {
+                GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+            }
+            #endif
+            return
+        }
+        
         // Traitement normal des messages de synchronisation
         guard let history = message["history"] as? [[String: Any]] else {
             print("❌ Format de message invalide")
@@ -270,32 +301,27 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         if message["history"] != nil {
             processReceivedMessage(message)
         }
-        
-        if let type = message["type"] as? String {
-            switch type {
-            case "goals":
-                if let goals = message["goals"] as? [String: Double] {
-                    print("📥 Objectifs reçus: \(goals.count) exercices")
-                    #if os(watchOS)
-                    GoalsManager.shared.processReceivedGoals(goals)
-                    #else
-                    // Sur iOS, on met à jour le cache
-                    for (name, time) in goals {
-                        GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
-                    }
-                    #endif
-                }
-            default:
-                break
-            }
-        }
     }
     
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
         print("📥 UserInfo reçu, clés:", userInfo.keys)
         
-        if userInfo["history"] != nil {
+        if let history = userInfo["history"] as? [[String: Any]] {
             processReceivedMessage(userInfo)
+        }
+        
+        // Traiter les objectifs reçus via transferUserInfo
+        if let type = userInfo["type"] as? String, type == "goals",
+           let goals = userInfo["goals"] as? [String: Double] {
+            print("📥 Objectifs reçus via transferUserInfo: \(goals.count) exercices")
+            #if os(watchOS)
+            GoalsManager.shared.processReceivedGoals(goals)
+            #else
+            // Sur iOS, on met à jour le cache
+            for (name, time) in goals {
+                GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+            }
+            #endif
         }
     }
     
@@ -455,16 +481,41 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     
     // Envoyer les objectifs à l'autre appareil
     func sendGoals() {
-        guard WCSession.default.activationState == .activated else { return }
+        guard WCSession.default.activationState == .activated else {
+            print("⚠️ Impossible d'envoyer les objectifs : WCSession non activée")
+            return
+        }
         
         let goals = GoalsManager.shared.getAllGoals()
+        print("📱 Envoi de \(goals.count) objectifs à la Watch")
+        
+        // Afficher les objectifs pour le debug
+        for (name, time) in goals {
+            print("📱 Objectif \(name): \(time)s")
+        }
+        
         let message: [String: Any] = [
             "type": "goals",
             "goals": goals
         ]
         
-        WCSession.default.sendMessage(message, replyHandler: nil) { error in
-            print("❌ Erreur envoi objectifs: \(error.localizedDescription)")
+        // Essayer d'abord avec sendMessage
+        if WCSession.default.isReachable {
+            print("📱 Watch reachable, envoi direct...")
+            WCSession.default.sendMessage(message, replyHandler: { reply in
+                print("✅ Objectifs envoyés avec succès, réponse:", reply)
+            }) { error in
+                print("❌ Erreur envoi objectifs: \(error.localizedDescription)")
+                // En cas d'échec, utiliser transferUserInfo
+                print("📱 Tentative avec transferUserInfo...")
+                WCSession.default.transferUserInfo(message)
+            }
+        } else {
+            print("📱 Watch non reachable, utilisation de transferUserInfo")
+            // Envoyer plusieurs fois pour s'assurer que ça passe
+            for _ in 0...2 {
+                WCSession.default.transferUserInfo(message)
+            }
         }
     }
     

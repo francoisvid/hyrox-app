@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import WatchConnectivity
 
 class GoalsManager {
     static let shared = GoalsManager()
@@ -75,7 +76,12 @@ class GoalsManager {
         
         // Envoyer les objectifs à l'autre appareil
         #if os(iOS)
-        DataSyncManager.shared.sendGoals()
+        if WCSession.default.activationState == .activated {
+            print("📱 Envoi des objectifs à la Watch...")
+            DataSyncManager.shared.sendGoals()
+        } else {
+            print("⚠️ WCSession non activée, impossible d'envoyer les objectifs")
+        }
         #endif
     }
     
@@ -119,9 +125,22 @@ class GoalsManager {
     // Recevoir les objectifs de l'iPhone (Watch seulement)
     #if os(watchOS)
     func processReceivedGoals(_ goals: [String: Double]) {
-        print("📱 Traitement de \(goals.count) objectifs reçus de l'iPhone")
+        print("⌚️ Traitement de \(goals.count) objectifs reçus de l'iPhone")
         
+        // Effacer d'abord tous les objectifs existants
+        let allKeys = defaults.dictionaryRepresentation().keys
+        for key in allKeys {
+            if key.hasPrefix(keyPrefix) {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        
+        // Réinitialiser le cache
+        goalsCache.removeAll()
+        
+        // Sauvegarder les nouveaux objectifs
         for (exercise, time) in goals {
+            print("⌚️ Objectif reçu pour \(exercise): \(time)s")
             let key = keyPrefix + exercise
             defaults.set(time, forKey: key)
             goalsCache[exercise] = time
@@ -133,10 +152,12 @@ class GoalsManager {
         print("✅ \(goals.count) objectifs sauvegardés depuis l'iPhone")
         
         // Notifier pour mettre à jour l'UI
-        NotificationCenter.default.post(
-            name: NSNotification.Name("GoalsUpdated"),
-            object: nil
-        )
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("GoalsUpdated"),
+                object: nil
+            )
+        }
     }
     #endif
 }
