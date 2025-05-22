@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A75CDBE42DDF76A300B3FDE0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBE32DDF76A300B3FDE0 /* FirebaseAuth */; };
+		A75CDBE62DDF76A300B3FDE0 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBE52DDF76A300B3FDE0 /* FirebaseCore */; };
+		A75CDBE82DDF76A300B3FDE0 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBE72DDF76A300B3FDE0 /* FirebaseFirestore */; };
+		A75CDBEA2DDF775300B3FDE0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBE92DDF775300B3FDE0 /* FirebaseAuth */; };
+		A75CDBEC2DDF775300B3FDE0 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBEB2DDF775300B3FDE0 /* FirebaseCore */; };
+		A75CDBEE2DDF775300B3FDE0 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBED2DDF775300B3FDE0 /* FirebaseFirestore */; };
+		A78B7E9A2DDF785C0043DD29 /* FirebaseFirestoreCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = A78B7E992DDF785C0043DD29 /* FirebaseFirestoreCombine-Community */; };
 		A7B866EA2DDCC3250010D152 /* hyrox watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A7B866E02DDCC3240010D152 /* hyrox watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -61,6 +68,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Config /ExerciseDefinition.swift",
+				"Config /FirebaseConfig.swift",
 				CoreData/DataController.swift,
 				CoreData/hyrox.xcdatamodeld,
 				Manager/DataSyncManager.swift,
@@ -100,6 +108,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A75CDBE62DDF76A300B3FDE0 /* FirebaseCore in Frameworks */,
+				A78B7E9A2DDF785C0043DD29 /* FirebaseFirestoreCombine-Community in Frameworks */,
+				A75CDBE42DDF76A300B3FDE0 /* FirebaseAuth in Frameworks */,
+				A75CDBE82DDF76A300B3FDE0 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -107,6 +119,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A75CDBEC2DDF775300B3FDE0 /* FirebaseCore in Frameworks */,
+				A75CDBEA2DDF775300B3FDE0 /* FirebaseAuth in Frameworks */,
+				A75CDBEE2DDF775300B3FDE0 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,6 +169,10 @@
 			);
 			name = hyrox;
 			packageProductDependencies = (
+				A75CDBE32DDF76A300B3FDE0 /* FirebaseAuth */,
+				A75CDBE52DDF76A300B3FDE0 /* FirebaseCore */,
+				A75CDBE72DDF76A300B3FDE0 /* FirebaseFirestore */,
+				A78B7E992DDF785C0043DD29 /* FirebaseFirestoreCombine-Community */,
 			);
 			productName = hyrox;
 			productReference = A70A06092DD7E7830083EB3C /* hyrox.app */;
@@ -176,6 +195,9 @@
 			);
 			name = "hyrox watch Watch App";
 			packageProductDependencies = (
+				A75CDBE92DDF775300B3FDE0 /* FirebaseAuth */,
+				A75CDBEB2DDF775300B3FDE0 /* FirebaseCore */,
+				A75CDBED2DDF775300B3FDE0 /* FirebaseFirestore */,
 			);
 			productName = "hyrox watch Watch App";
 			productReference = A7B866E02DDCC3240010D152 /* hyrox watch Watch App.app */;
@@ -208,6 +230,9 @@
 			);
 			mainGroup = A70A06002DD7E7830083EB3C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A70A060A2DD7E7830083EB3C /* Products */;
 			projectDirPath = "";
@@ -386,7 +411,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = hyrox/hyrox.entitlements;
+				CODE_SIGN_ENTITLEMENTS = hyrox/hyroxDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -549,6 +574,55 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.13.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A75CDBE32DDF76A300B3FDE0 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		A75CDBE52DDF76A300B3FDE0 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		A75CDBE72DDF76A300B3FDE0 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		A75CDBE92DDF775300B3FDE0 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		A75CDBEB2DDF775300B3FDE0 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		A75CDBED2DDF775300B3FDE0 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		A78B7E992DDF785C0043DD29 /* FirebaseFirestoreCombine-Community */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = "FirebaseFirestoreCombine-Community";
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A70A06012DD7E7830083EB3C /* Project object */;
 }

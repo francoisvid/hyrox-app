@@ -1,48 +1,4 @@
 import SwiftUI
-import Combine
-
-// MARK: - AuthViewModel
-
-@MainActor
-class AuthViewModel: ObservableObject {
-    @Published var email = "test@email.com"
-    @Published var password = "test"
-    @Published var rememberMe = false
-    @Published var isRegistering = false
-
-    @Published var isLoading = false
-    @Published var showAlert = false
-    @Published var alertMessage = ""
-    @Published var isLoggedIn = false
-
-    var isFormValid: Bool {
-        !email.isEmpty && !password.isEmpty && email.contains("@")
-    }
-
-    func toggleMode() { isRegistering.toggle() }
-
-    func submit() {
-        guard isFormValid else {
-            alertMessage = "Veuillez remplir correctement le formulaire."
-            showAlert = true
-            return
-        }
-        isLoading = true
-        DispatchQueue.main.asyncAfter(deadline: .now()+1.5) {
-            self.isLoading = false
-            if self.isRegistering {
-                self.alertMessage = "Compte créé avec succès !"
-                self.showAlert = true
-                self.isRegistering = false
-            } else {
-                self.isLoggedIn = true
-                if self.rememberMe {
-                    UserDefaults.standard.set(self.email, forKey: "savedEmail")
-                }
-            }
-        }
-    }
-}
 
 // MARK: - LoginView
 
@@ -86,7 +42,8 @@ struct LoginView: View {
                     }
                     .disabled(!vm.isFormValid || vm.isLoading)
 
-                    //SocialLoginButtonsView()
+                    SocialLoginButtonsView()
+                        .environmentObject(vm)
 
                     Text("En vous connectant, vous acceptez nos Conditions d'utilisation.")
                         .font(.caption).foregroundColor(.gray)
@@ -256,10 +213,14 @@ private struct SocialButton: View {
 }
 
 private struct SocialLoginButtonsView: View {
+    @EnvironmentObject var vm: AuthViewModel
+
     var body: some View {
         VStack(spacing: 12) {
-            SocialButton(icon: "g.circle.fill", text: "Continuer avec Google") { /*…*/ }
-            SocialButton(icon: "apple.logo",   text: "Continuer avec Apple")  { /*…*/ }
+            //SocialButton(icon: "g.circle.fill", text: "Continuer avec Google") { /*…*/ }
+            SocialButton(icon: "apple.logo", text: "Continuer avec Apple") {
+                vm.signInWithApple()
+            }
         }
     }
 }
@@ -295,7 +256,7 @@ private extension ToggleStyle where Self == CheckboxToggleStyle {
     static var checkbox: CheckboxToggleStyle { .init() }
 }
 
-// MARK: - Color hex initializer (move to Extensions/Color+Hex.swift)
+// MARK: - Color hex initializer
 
 extension Color {
     init(hex: String) {
