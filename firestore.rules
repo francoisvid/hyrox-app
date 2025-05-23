@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Autorise tout jusqu'au 22 juin 2025
+    match /{document=**} {
+      allow read, write: if request.time < timestamp.date(2025, 6, 22);
+    }
+
+    // Cas spécifique pour workouts avec sous-collections dynamiques
+    match /workouts/{workoutId} {
+      allow read, write: if request.time < timestamp.date(2025, 6, 22);
+
+      match /{subcollection=**}/{docId} {
+        allow read, write: if request.time < timestamp.date(2025, 6, 22);
+      }
+    }
+  }
+}

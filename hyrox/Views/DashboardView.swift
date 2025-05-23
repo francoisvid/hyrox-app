@@ -119,6 +119,16 @@ struct DashboardView: View {
                         formatTime: viewModel.formatTime(_:)
                     )
                 }
+                
+                #if DEBUG
+                Button("Test Start Workout") {
+                    viewModel.startNewWorkout(name: "Test Sync Firebase")
+                }
+                .padding()
+                .background(Color.yellow)
+                .foregroundColor(.black)
+                .cornerRadius(8)
+                #endif
 
                 // Section des prochains événements
                 VStack(alignment: .leading, spacing: 12) {

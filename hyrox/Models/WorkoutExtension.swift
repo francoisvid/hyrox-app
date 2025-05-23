@@ -103,6 +103,7 @@ extension Workout {
         w.completed = false
         w.duration = 0
         w.distance = 0
+        w.userId = UUID(uuidString: "00000000-0000-0000-0000-000000000000") // ID utilisateur par défaut pour les tests
         return w
     }
 

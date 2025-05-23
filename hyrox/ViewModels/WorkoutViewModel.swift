@@ -49,14 +49,25 @@ class WorkoutViewModel: ObservableObject {
         workoutManager.startNewWorkout()
         saveAndSync(workoutManager.currentWorkout)
     }
+    
+    func startNewWorkout(name: String) {
+        workoutManager.startNewWorkout()
+    }
 
     func endWorkout() {
         workoutManager.endWorkout()
         saveAndSync()
     }
 
+    func forceRefresh() {
+        objectWillChange.send()
+        reloadWorkouts()
+    }
+    
     func reloadWorkouts() {
         workoutManager.loadWorkouts()
+        objectWillChange.send() // Force UI update
+        print("🔄 WorkoutViewModel rechargé: \(workouts.count) workouts")
     }
     
     func saveAndSync(_ workout: Workout? = nil) {

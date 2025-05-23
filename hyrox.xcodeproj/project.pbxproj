@@ -15,6 +15,7 @@
 		A75CDBEE2DDF775300B3FDE0 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A75CDBED2DDF775300B3FDE0 /* FirebaseFirestore */; };
 		A78B7E9A2DDF785C0043DD29 /* FirebaseFirestoreCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = A78B7E992DDF785C0043DD29 /* FirebaseFirestoreCombine-Community */; };
 		A7B866EA2DDCC3250010D152 /* hyrox watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A7B866E02DDCC3240010D152 /* hyrox watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A7F923152DE0A08F0001A1B1 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = A7F923142DE0A08F0001A1B1 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,7 +69,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Config /ExerciseDefinition.swift",
-				"Config /FirebaseConfig.swift",
 				CoreData/DataController.swift,
 				CoreData/hyrox.xcdatamodeld,
 				Manager/DataSyncManager.swift,
@@ -110,6 +110,7 @@
 			files = (
 				A75CDBE62DDF76A300B3FDE0 /* FirebaseCore in Frameworks */,
 				A78B7E9A2DDF785C0043DD29 /* FirebaseFirestoreCombine-Community in Frameworks */,
+				A7F923152DE0A08F0001A1B1 /* FirebaseMessaging in Frameworks */,
 				A75CDBE42DDF76A300B3FDE0 /* FirebaseAuth in Frameworks */,
 				A75CDBE82DDF76A300B3FDE0 /* FirebaseFirestore in Frameworks */,
 			);
@@ -173,6 +174,7 @@
 				A75CDBE52DDF76A300B3FDE0 /* FirebaseCore */,
 				A75CDBE72DDF76A300B3FDE0 /* FirebaseFirestore */,
 				A78B7E992DDF785C0043DD29 /* FirebaseFirestoreCombine-Community */,
+				A7F923142DE0A08F0001A1B1 /* FirebaseMessaging */,
 			);
 			productName = hyrox;
 			productReference = A70A06092DD7E7830083EB3C /* hyrox.app */;
@@ -417,6 +419,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9DJHH4ZSN5;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = hyrox/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MyROX;
@@ -455,6 +458,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9DJHH4ZSN5;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = hyrox/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MyROX;
@@ -621,6 +625,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = "FirebaseFirestoreCombine-Community";
+		};
+		A7F923142DE0A08F0001A1B1 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A75CDBDF2DDF74F300B3FDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

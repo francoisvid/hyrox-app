@@ -1,6 +1,11 @@
 import Foundation
+import FirebaseAuth
 import CoreData
 import WatchConnectivity
+#if os(iOS)
+import FirebaseCore
+import FirebaseFirestore
+#endif
 
 final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     static let shared = DataSyncManager()
@@ -55,13 +60,31 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         guard
             let workoutID = workout.id?.uuidString,
             WCSession.default.activationState == .activated
-        else { return }
+        else {
+            print("⚠️ Impossible d'envoyer le workout: session non activée ou ID manquant")
+            return
+        }
+        
+        // Vérifier si on a déjà envoyé récemment pour éviter les doublons
+        let lastSentKey = "lastSent_\(workoutID)"
+        let lastSent = UserDefaults.standard.object(forKey: lastSentKey) as? Date
+        
+        if let lastSent = lastSent, Date().timeIntervalSince(lastSent) < 5 {
+            print("⏭️ Workout \(workoutID) déjà envoyé il y a moins de 5 secondes, skip")
+            return
+        }
+        
+        // Marquer comme envoyé
+        UserDefaults.standard.set(Date(), forKey: lastSentKey)
+        
+        print("📤 Préparation envoi workout \(workoutID)")
         
         // Préparer les données du workout
         var workoutData: [String: Any] = [
             "name": workout.name ?? "Unnamed",
             "duration": workout.duration,
-            "completed": workout.completed
+            "completed": workout.completed,
+            "distance": workout.distance
         ]
         
         if let date = workout.date {
@@ -73,6 +96,9 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         if let exercises = workout.exercises?.allObjects as? [Exercise] {
             // Utiliser l'ordre standard des exercices
             let orderedExercises = workout.orderedExercises
+            
+            print("📊 \(orderedExercises.count) exercices à envoyer")
+            
             for exercise in orderedExercises {
                 guard let exerciseID = exercise.id?.uuidString else { continue }
                 
@@ -80,20 +106,15 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     "id": exerciseID,
                     "name": exercise.name ?? "Unnamed",
                     "duration": exercise.duration,
-                    "workoutID": workoutID
+                    "distance": exercise.distance,
+                    "repetitions": exercise.repetitions,
+                    "workoutID": workoutID,
+                    "order": exercise.order,
+                    "personalBest": exercise.personalBest
                 ]
                 
                 if let date = exercise.date {
                     exData["date"] = date.timeIntervalSince1970
-                }
-                
-                // Ajouter des propriétés spécifiques
-                if exercise.repetitions > 0 {
-                    exData["repetitions"] = exercise.repetitions
-                }
-                
-                if exercise.distance > 0 {
-                    exData["distance"] = exercise.distance
                 }
                 
                 exercisesData.append([
@@ -120,15 +141,21 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         
         let message: [String: Any] = ["history": historyItems]
         
-        // Envoyer le message
+        print("📤 Envoi de \(historyItems.count) éléments (1 workout + \(exercisesData.count) exercices)")
+        
+        // Envoyer le message avec gestion des erreurs améliorée
         if WCSession.default.isReachable {
+            print("✅ Watch/iPhone accessible, envoi direct...")
             WCSession.default.sendMessage(
                 message,
                 replyHandler: { reply in
                     print("✅ Workout envoyé avec succès, réponse:", reply)
+                    // Nettoyer le flag après succès
+                    UserDefaults.standard.removeObject(forKey: lastSentKey)
                 },
                 errorHandler: { error in
                     print("❌ Erreur d'envoi WCSession:", error)
+                    print("📤 Tentative avec transferUserInfo comme fallback")
                     WCSession.default.transferUserInfo(message)
                 }
             )
@@ -261,67 +288,147 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     }
     
     func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
-        print("📱 Message reçu de la Watch:", message)
+        print("📱 Message reçu: \(message["action"] ?? message["type"] ?? "unknown")")
         
-        // Vérifier si c'est un message de suppression
-        if let action = message["action"] as? String, action == "clearAllData" {
-            print("📱 Suppression de toutes les données demandée par la Watch")
-            DataController.shared.clearAllData()
-            return
-        }
-        
-        // Traiter les messages d'objectifs
-        if let type = message["type"] as? String, type == "goals",
-           let goals = message["goals"] as? [String: Double] {
-            print("📥 Objectifs reçus: \(goals.count) exercices")
-            #if os(watchOS)
-            GoalsManager.shared.processReceivedGoals(goals)
-            #else
-            // Sur iOS, on met à jour le cache
-            for (name, time) in goals {
-                GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+        // 1. Gérer les actions spécifiques en premier
+        if let action = message["action"] as? String {
+            DispatchQueue.main.async {
+                switch action {
+                case "deleteAllWorkouts", "clearAllData":
+                    print("🗑️ Suppression de tous les workouts demandée")
+                    DataController.shared.clearAllData()
+                    
+                    // Notification pour rafraîchir l'UI
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("WorkoutsDeleted"),
+                        object: nil
+                    )
+                    
+                case "deleteWorkout":
+                    if let workoutId = message["workoutId"] as? String {
+                        print("🗑️ Suppression du workout \(workoutId)")
+                        self.handleDeleteWorkout(workoutId)
+                        
+                        // Notification pour rafraîchir l'UI
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("WorkoutDeleted"),
+                            object: nil,
+                            userInfo: ["workoutId": workoutId]
+                        )
+                    }
+                    
+                case "requestAllWorkouts":
+                    #if os(watchOS)
+                    print("📤 Envoi de tous les workouts vers l'iPhone")
+                    self.sendAllWorkoutsToPhone()
+                    #endif
+                    
+                default:
+                    print("⚠️ Action inconnue: \(action)")
+                }
             }
-            #endif
             return
         }
         
-        // Traitement normal des messages de synchronisation
-        guard let history = message["history"] as? [[String: Any]] else {
-            print("❌ Format de message invalide")
-            return
+        // 2. Gérer les messages de type (goals, etc.)
+        if let type = message["type"] as? String {
+            switch type {
+            case "goals":
+                if let goals = message["goals"] as? [String: Double] {
+                    print("📥 Objectifs reçus: \(goals.count) exercices")
+                    #if os(watchOS)
+                    GoalsManager.shared.processReceivedGoals(goals)
+                    #else
+                    // Sur iOS, mettre à jour le cache
+                    for (name, time) in goals {
+                        GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
+                    }
+                    #endif
+                }
+                return
+                
+            case "test":
+                print("📥 Message de test reçu")
+                return
+                
+            default:
+                print("⚠️ Type de message inconnu: \(type)")
+            }
         }
         
-        print("📥 Message reçu sans replyHandler, clés:", message.keys)
-        
-        if message["test"] != nil {
-            print("📥 Message de test reçu")
-            return
-        }
-        
-        if message["history"] != nil {
+        // 3. Gérer les messages d'historique (workouts/exercices)
+        if let history = message["history"] as? [[String: Any]] {
+            print("📥 Historique reçu avec \(history.count) changements")
             processReceivedMessage(message)
+            return
         }
+        
+        // 4. Si aucun cas ne correspond
+        print("⚠️ Format de message non reconnu: \(message.keys)")
     }
     
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
         print("📥 UserInfo reçu, clés:", userInfo.keys)
-        
-        if let history = userInfo["history"] as? [[String: Any]] {
-            processReceivedMessage(userInfo)
+
+        // 📌 1. Traiter la suppression complète
+        if let action = userInfo["action"] as? String, action == "clearAllData" {
+            print("🧹 Suppression demandée via WCSession")
+            DispatchQueue.main.async {
+                DataController.shared.clearAllData()
+            }
+            return
         }
-        
-        // Traiter les objectifs reçus via transferUserInfo
+
+        // 📌 2. Traiter les objectifs
         if let type = userInfo["type"] as? String, type == "goals",
            let goals = userInfo["goals"] as? [String: Double] {
             print("📥 Objectifs reçus via transferUserInfo: \(goals.count) exercices")
             #if os(watchOS)
             GoalsManager.shared.processReceivedGoals(goals)
             #else
-            // Sur iOS, on met à jour le cache
             for (name, time) in goals {
                 GoalsManager.shared.setGoalFor(exerciseName: name, targetTime: time)
             }
             #endif
+            return
+        }
+
+        // 📌 3. Traiter l'historique (workouts)
+        if let historyPayload = userInfo["history"] as? [[String: Any]] {
+            let bg = DataController.shared.container.newBackgroundContext()
+            bg.perform {
+                for dict in historyPayload {
+                    guard
+                        let uriString = dict["id"] as? String,
+                        let url       = URL(string: uriString),
+                        let objID     = bg.persistentStoreCoordinator?
+                                          .managedObjectID(forURIRepresentation: url),
+                        let rawType   = dict["type"] as? Int
+                    else { continue }
+
+                    do {
+                        let obj = try bg.existingObject(with: objID)
+                        if rawType == NSPersistentHistoryChangeType.insert.rawValue ||
+                           rawType == NSPersistentHistoryChangeType.update.rawValue {
+                            if let values = dict["values"] as? [String:Any] {
+                                values.forEach { key, val in
+                                    obj.setValue(val is NSNull ? nil : val, forKey: key)
+                                }
+                            }
+                        } else if rawType == NSPersistentHistoryChangeType.delete.rawValue {
+                            bg.delete(obj)
+                        }
+                    } catch {
+                        print("Merge error:", error)
+                    }
+                }
+                do {
+                    try bg.save()
+                    print("✅ Merged \(historyPayload.count) changes from Watch")
+                } catch {
+                    print("❌ Failed saving merged data:", error)
+                }
+            }
         }
     }
     
@@ -337,9 +444,12 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         
         let bg = container.newBackgroundContext()
         bg.perform {
+            var workoutsToSync: Set<String> = []
+            var processedIds: Set<String> = []
+            var hasNewWorkouts = false
+            
+            // 1. Traiter tous les changements
             for change in historyData {
-                print("🔍 Traitement changement:", change)
-                
                 guard
                     let entityName = change["entity"] as? String,
                     let idString = change["id"] as? String,
@@ -348,6 +458,13 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     print("⚠️ Données de changement incomplètes")
                     continue
                 }
+                
+                let uniqueKey = "\(entityName)-\(idString)"
+                if processedIds.contains(uniqueKey) {
+                    print("⏭️ Déjà traité: \(uniqueKey)")
+                    continue
+                }
+                processedIds.insert(uniqueKey)
                 
                 if rawType == NSPersistentHistoryChangeType.insert.rawValue ||
                    rawType == NSPersistentHistoryChangeType.update.rawValue {
@@ -359,22 +476,52 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     
                     if entityName == "Workout" {
                         self.processWorkout(idString: idString, values: values, context: bg)
+                        workoutsToSync.insert(idString)
+                        hasNewWorkouts = true
                     } else if entityName == "Exercise" {
                         self.processExercise(idString: idString, values: values, context: bg)
-                    } else {
-                        print("⚠️ Type d'entité inconnu:", entityName)
+                        if let workoutID = values["workoutID"] as? String {
+                            workoutsToSync.insert(workoutID)
+                        }
                     }
-                } else if rawType == NSPersistentHistoryChangeType.delete.rawValue {
-                    // Traiter les suppressions si nécessaire
                 }
             }
             
+            // 2. Sauvegarder dans CoreData
             do {
                 if bg.hasChanges {
                     try bg.save()
                     print("✅ Changements sauvegardés dans Core Data")
-                } else {
-                    print("ℹ️ Aucun changement à sauvegarder")
+                    
+                    // 3. Notifier l'UI si nouveaux workouts
+                    if hasNewWorkouts {
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(
+                                name: NSNotification.Name("WorkoutReceived"),
+                                object: nil
+                            )
+                        }
+                    }
+                    
+                    // 4. Synchroniser avec Firebase (iOS seulement)
+                    #if os(iOS)
+                    Task { @MainActor in
+                        for workoutId in workoutsToSync {
+                            do {
+                                let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+                                fetchRequest.predicate = NSPredicate(format: "id == %@", workoutId)
+                                
+                                let context = self.container.viewContext
+                                if let workout = try context.fetch(fetchRequest).first {
+                                    try await self.saveWorkoutToFirebase(workout)
+                                    print("✅ Workout \(workoutId) synchronisé avec Firebase")
+                                }
+                            } catch {
+                                print("❌ Erreur synchronisation Firebase pour workout \(workoutId):", error)
+                            }
+                        }
+                    }
+                    #endif
                 }
             } catch {
                 print("❌ Erreur lors de la sauvegarde:", error)
@@ -529,4 +676,240 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         session.activate()
     }
     #endif
+    
+    // MARK: - Firebase Operations
+    
+    #if os(iOS)
+    func deleteWorkout(_ workoutId: String) async throws {
+        let db = Firestore.firestore()
+        
+        // Supprimer les exercices d'abord
+        let exercisesSnapshot = try await db.collection("workouts")
+            .document(workoutId)
+            .collection("exercises")
+            .getDocuments()
+        
+        for exerciseDoc in exercisesSnapshot.documents {
+            try await db.collection("workouts")
+                .document(workoutId)
+                .collection("exercises")
+                .document(exerciseDoc.documentID)
+                .delete()
+        }
+        
+        // Supprimer le workout
+        try await db.collection("workouts")
+            .document(workoutId)
+            .delete()
+        
+        // Supprimer les statistiques associées
+        try await db.collection("users")
+            .document("test_user") // ID utilisateur par défaut pour les tests
+            .collection("statistics")
+            .document("workouts")
+            .collection(workoutId)
+            .document(workoutId)
+            .delete()
+    }
+    
+    func saveWorkoutToFirebase(_ workout: Workout) async throws {
+        guard let workoutId = workout.id?.uuidString else {
+            throw NSError(domain: "DataSyncManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid workout ID"])
+        }
+        
+        let db = Firestore.firestore()
+        
+        // Utiliser convertToFirebase qui inclut déjà les exercices dans un array
+        guard var workoutData = FirebaseStructure.convertToFirebase(workout) else {
+            throw NSError(domain: "DataSyncManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert workout"])
+        }
+        
+        // Ajouter l'userId si disponible
+        #if os(iOS)
+        if let userId = Auth.auth().currentUser?.uid {
+            workoutData["userId"] = userId
+        }
+        #endif
+        
+        // Une seule écriture avec tout inclus
+        let workoutRef = db.collection("workouts").document(workoutId)
+        try await workoutRef.setData(workoutData, merge: true)
+        
+        print("✅ Workout complet (avec \(workout.exercises?.count ?? 0) exercices) sauvegardé dans Firebase")
+    }
+    
+    func deleteAllWorkoutsFromFirebase() async throws {
+        print("deleteAllWorkoutsFromFirebase")
+        let db = Firestore.firestore()
+        let workoutsCollection = db.collection("workouts")
+        
+        // Obtenir tous les documents dans la collection workouts
+        let snapshot = try await workoutsCollection.getDocuments()
+        
+        // Supprimer chaque document workout
+        for document in snapshot.documents {
+            try await document.reference.delete()
+        }
+    }
+    #endif
+    
+    // MARK: - Suppression synchronisée
+
+    #if os(iOS)
+    func deleteWorkoutEverywhere(_ workoutId: String) async throws {
+        // 1. Supprimer de Firebase
+        try await deleteWorkout(workoutId)
+        
+        // 2. Envoyer message de suppression à la Watch
+        let deleteMessage: [String: Any] = [
+            "action": "deleteWorkout",
+            "workoutId": workoutId,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(deleteMessage, replyHandler: nil) { error in
+                print("❌ Erreur envoi suppression à Watch: \(error)")
+                // Utiliser transferUserInfo comme fallback
+                WCSession.default.transferUserInfo(deleteMessage)
+            }
+        } else {
+            WCSession.default.transferUserInfo(deleteMessage)
+        }
+    }
+
+    func syncAllWorkoutsFromWatch() async throws {
+        // Implémenter la récupération des workouts depuis la Watch
+        let message: [String: Any] = [
+            "action": "requestAllWorkouts",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: { response in
+                if let workouts = response["workouts"] as? [[String: Any]] {
+                    Task {
+                        for workoutData in workouts {
+                            // Traiter chaque workout
+                            self.processReceivedMessage(["history": [workoutData]])
+                        }
+                    }
+                }
+            }) { error in
+                print("❌ Erreur récupération workouts Watch: \(error)")
+            }
+        }
+    }
+    #endif
+    
+    #if os(watchOS)
+    // MARK: - Watch → iPhone sync
+
+    private func sendAllWorkoutsToPhone() {
+        let context = container.viewContext
+        let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+        
+        do {
+            let workouts = try context.fetch(fetchRequest)
+            print("⌚️ Envoi de \(workouts.count) workouts vers l'iPhone")
+            
+            // Créer le payload pour tous les workouts
+            var historyItems: [[String: Any]] = []
+            
+            for workout in workouts {
+                guard let workoutId = workout.id?.uuidString else { continue }
+                
+                // Données du workout
+                var workoutData: [String: Any] = [
+                    "id": workoutId,
+                    "name": workout.name ?? "Unnamed",
+                    "duration": workout.duration,
+                    "completed": workout.completed,
+                    "distance": workout.distance,
+                    "date": workout.date?.timeIntervalSince1970 ?? 0
+                ]
+                
+                // Ajouter le workout
+                historyItems.append([
+                    "entity": "Workout",
+                    "id": workoutId,
+                    "type": 0, // Insert
+                    "values": workoutData
+                ])
+                
+                // Ajouter les exercices
+                if let exercises = workout.exercises as? Set<Exercise> {
+                    for exercise in exercises {
+                        guard let exerciseId = exercise.id?.uuidString else { continue }
+                        
+                        let exerciseData: [String: Any] = [
+                            "id": exerciseId,
+                            "name": exercise.name ?? "Unnamed",
+                            "duration": exercise.duration,
+                            "distance": exercise.distance,
+                            "repetitions": exercise.repetitions,
+                            "workoutID": workoutId,
+                            "order": exercise.order,
+                            "personalBest": exercise.personalBest,
+                            "date": exercise.date?.timeIntervalSince1970 ?? 0
+                        ]
+                        
+                        historyItems.append([
+                            "entity": "Exercise",
+                            "id": exerciseId,
+                            "type": 0, // Insert
+                            "values": exerciseData
+                        ])
+                    }
+                }
+            }
+            
+            if !historyItems.isEmpty {
+                let message: [String: Any] = ["history": historyItems]
+                
+                if WCSession.default.isReachable {
+                    WCSession.default.sendMessage(message, replyHandler: { reply in
+                        print("✅ \(workouts.count) workouts envoyés à l'iPhone")
+                    }) { error in
+                        print("❌ Erreur envoi workouts: \(error)")
+                        // Fallback avec transferUserInfo
+                        WCSession.default.transferUserInfo(message)
+                    }
+                } else {
+                    WCSession.default.transferUserInfo(message)
+                    print("📤 Workouts envoyés via transferUserInfo")
+                }
+            }
+        } catch {
+            print("❌ Erreur récupération workouts: \(error)")
+        }
+    }
+    #endif
+    
+    private func handleDeleteWorkout(_ workoutId: String) {
+        let context = container.viewContext
+        let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", workoutId)
+        
+        context.perform {
+            do {
+                let workouts = try context.fetch(fetchRequest)
+                for workout in workouts {
+                    context.delete(workout)
+                }
+                try context.save()
+                print("✅ Workout \(workoutId) supprimé localement")
+                
+                // Notification pour rafraîchir l'UI
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("WorkoutDeleted"),
+                        object: nil
+                    )
+                }
+            } catch {
+                print("❌ Erreur suppression workout local: \(error)")
+            }
+        }
+    }
 }
