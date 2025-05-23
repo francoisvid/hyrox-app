@@ -1,9 +1,8 @@
-// HyroxApp.swift
-
 import SwiftUI
 import CoreData
 import WatchConnectivity
 import FirebaseCore
+import FirebaseFirestore
 
 @main
 struct HyroxApp: App {
@@ -11,13 +10,31 @@ struct HyroxApp: App {
     @AppStorage("isDarkModeEnabled") private var isDarkModeEnabled = true
     
     // Initialisation explicite
-    private let dataController = DataController.shared
-    private let syncManager = DataSyncManager.shared
+    private let dataController: DataController
+    private let syncManager: DataSyncManager
+    private let firebaseSyncManager: SyncManager
     
     init() {
         print("🚀 Initialisation de l'application iOS")
-        //FirebaseConfig.shared.configure()
+        
+        // Configurer Firebase en premier
         FirebaseApp.configure()
+        
+        // Configuration pour l'émulateur en mode debug
+        #if DEBUG
+        let settings = FirestoreSettings()
+        settings.host = "localhost:8080"
+        settings.isPersistenceEnabled = false
+        settings.isSSLEnabled = false
+        
+        let db = Firestore.firestore()
+        db.settings = settings
+        #endif
+        
+        // Initialiser les managers
+        self.dataController = DataController.shared
+        self.syncManager = DataSyncManager.shared
+        self.firebaseSyncManager = SyncManager.shared
         
         // Activer la session explicitement
         if WCSession.isSupported() {
@@ -28,16 +45,12 @@ struct HyroxApp: App {
                 WCSession.default.activate()
             }
         }
-        
-        // Seed / load Core Data
-        // dataController.createDemoDataIfNeeded()
     }
 
     var body: some Scene {
         WindowGroup {
             SplashScreenView()
-                .environment(\.managedObjectContext,
-                              dataController.container.viewContext)
+                .environment(\.managedObjectContext, dataController.container.viewContext)
                 .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
                 .onChange(of: scenePhase) { newPhase in
                     if newPhase == .active {

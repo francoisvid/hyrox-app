@@ -49,6 +49,10 @@ class WorkoutViewModel: ObservableObject {
         workoutManager.startNewWorkout()
         saveAndSync(workoutManager.currentWorkout)
     }
+    
+    func startNewWorkout(name: String) {
+        workoutManager.startNewWorkout()
+    }
 
     func endWorkout() {
         workoutManager.endWorkout()

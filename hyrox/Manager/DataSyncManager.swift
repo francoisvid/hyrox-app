@@ -1,6 +1,11 @@
 import Foundation
+import FirebaseAuth
 import CoreData
 import WatchConnectivity
+#if os(iOS)
+import FirebaseCore
+import FirebaseFirestore
+#endif
 
 final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     static let shared = DataSyncManager()
@@ -61,7 +66,8 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         var workoutData: [String: Any] = [
             "name": workout.name ?? "Unnamed",
             "duration": workout.duration,
-            "completed": workout.completed
+            "completed": workout.completed,
+            "distance": workout.distance
         ]
         
         if let date = workout.date {
@@ -80,20 +86,15 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     "id": exerciseID,
                     "name": exercise.name ?? "Unnamed",
                     "duration": exercise.duration,
-                    "workoutID": workoutID
+                    "distance": exercise.distance,
+                    "repetitions": exercise.repetitions,
+                    "workoutID": workoutID,
+                    "order": exercise.order,
+                    "personalBest": exercise.personalBest
                 ]
                 
                 if let date = exercise.date {
                     exData["date"] = date.timeIntervalSince1970
-                }
-                
-                // Ajouter des propriétés spécifiques
-                if exercise.repetitions > 0 {
-                    exData["repetitions"] = exercise.repetitions
-                }
-                
-                if exercise.distance > 0 {
-                    exData["distance"] = exercise.distance
                 }
                 
                 exercisesData.append([
@@ -337,6 +338,9 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         
         let bg = container.newBackgroundContext()
         bg.perform {
+            var workoutsToSync: Set<String> = []  // Pour tracker les workouts à synchroniser
+            
+            // 1. D'abord traiter TOUS les changements
             for change in historyData {
                 print("🔍 Traitement changement:", change)
                 
@@ -359,20 +363,55 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     
                     if entityName == "Workout" {
                         self.processWorkout(idString: idString, values: values, context: bg)
+                        workoutsToSync.insert(idString)  // Ajouter à la liste des workouts à synchroniser
                     } else if entityName == "Exercise" {
                         self.processExercise(idString: idString, values: values, context: bg)
+                        // Si c'est un exercice, on doit aussi synchroniser son workout parent
+                        if let workoutID = values["workoutID"] as? String {
+                            workoutsToSync.insert(workoutID)
+                        }
                     } else {
                         print("⚠️ Type d'entité inconnu:", entityName)
                     }
                 } else if rawType == NSPersistentHistoryChangeType.delete.rawValue {
-                    // Traiter les suppressions si nécessaire
+                    #if os(iOS)
+                    if entityName == "Workout" {
+                        Task {
+                            do {
+                                try await self.deleteWorkout(idString)
+                            } catch {
+                                print("❌ Erreur suppression Firebase:", error)
+                            }
+                        }
+                    }
+                    #endif
                 }
             }
             
+            // 2. Sauvegarder d'abord dans CoreData
             do {
                 if bg.hasChanges {
                     try bg.save()
                     print("✅ Changements sauvegardés dans Core Data")
+                    
+                    // 3. ENSUITE synchroniser avec Firebase
+                    #if os(iOS)
+                    for workoutId in workoutsToSync {
+                        Task {
+                            do {
+                                let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+                                fetchRequest.predicate = NSPredicate(format: "id == %@", workoutId)
+                                
+                                if let workout = try bg.fetch(fetchRequest).first {
+                                    try await self.saveWorkoutToFirebase(workout)
+                                    print("✅ Workout \(workoutId) synchronisé avec Firebase")
+                                }
+                            } catch {
+                                print("❌ Erreur synchronisation Firebase pour workout \(workoutId):", error)
+                            }
+                        }
+                    }
+                    #endif
                 } else {
                     print("ℹ️ Aucun changement à sauvegarder")
                 }
@@ -527,6 +566,82 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     func sessionDidDeactivate(_ session: WCSession) {
         print("📱 WCSession est désactivée, réactivation...")
         session.activate()
+    }
+    #endif
+    
+    // MARK: - Firebase Operations
+    
+    #if os(iOS)
+    func deleteWorkout(_ workoutId: String) async throws {
+        let db = Firestore.firestore()
+        
+        // Supprimer les exercices d'abord
+        let exercisesSnapshot = try await db.collection("workouts")
+            .document(workoutId)
+            .collection("exercises")
+            .getDocuments()
+        
+        for exerciseDoc in exercisesSnapshot.documents {
+            try await db.collection("workouts")
+                .document(workoutId)
+                .collection("exercises")
+                .document(exerciseDoc.documentID)
+                .delete()
+        }
+        
+        // Supprimer le workout
+        try await db.collection("workouts")
+            .document(workoutId)
+            .delete()
+        
+        // Supprimer les statistiques associées
+        try await db.collection("users")
+            .document("test_user") // ID utilisateur par défaut pour les tests
+            .collection("statistics")
+            .document("workouts")
+            .collection(workoutId)
+            .document(workoutId)
+            .delete()
+    }
+    
+    func saveWorkoutToFirebase(_ workout: Workout) async throws {
+        guard let workoutId = workout.id?.uuidString else {
+            throw NSError(domain: "DataSyncManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid workout ID"])
+        }
+        
+        let db = Firestore.firestore()
+        
+        // Utiliser convertToFirebase qui inclut déjà les exercices dans un array
+        guard var workoutData = FirebaseStructure.convertToFirebase(workout) else {
+            throw NSError(domain: "DataSyncManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert workout"])
+        }
+        
+        // Ajouter l'userId si disponible
+        #if os(iOS)
+        if let userId = Auth.auth().currentUser?.uid {
+            workoutData["userId"] = userId
+        }
+        #endif
+        
+        // Une seule écriture avec tout inclus
+        let workoutRef = db.collection("workouts").document(workoutId)
+        try await workoutRef.setData(workoutData, merge: true)
+        
+        print("✅ Workout complet (avec \(workout.exercises?.count ?? 0) exercices) sauvegardé dans Firebase")
+    }
+    
+    func deleteAllWorkoutsFromFirebase() async throws {
+        print("deleteAllWorkoutsFromFirebase")
+        let db = Firestore.firestore()
+        let workoutsCollection = db.collection("workouts")
+        
+        // Obtenir tous les documents dans la collection workouts
+        let snapshot = try await workoutsCollection.getDocuments()
+        
+        // Supprimer chaque document workout
+        for document in snapshot.documents {
+            try await document.reference.delete()
+        }
     }
     #endif
 }

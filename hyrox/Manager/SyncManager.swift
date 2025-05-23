@@ -1,14 +1,15 @@
 import Foundation
+import FirebaseCore
 import CoreData
 import FirebaseFirestore
 import Combine
 import Network
 
 /// Gère la synchronisation entre CoreData et Firebase
-final class SyncManager: ObservableObject {
-    static let shared = SyncManager()
+public final class SyncManager: ObservableObject {
+    public static let shared = SyncManager()
     
-    private let db = Firestore.firestore()
+    private var db: Firestore?
     private let container = DataController.shared.container
     private var listeners: [ListenerRegistration] = []
     private var cancellables = Set<AnyCancellable>()
@@ -18,13 +19,13 @@ final class SyncManager: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     
     // Published properties
-    @Published var isSyncing = false
-    @Published var syncErrors: [SyncError] = []
-    @Published var isConnected = true
+    @Published public var isSyncing = false
+    @Published public var syncErrors: [SyncError] = []
+    @Published public var isConnected = true
     
     // MARK: - Types
     
-    enum SyncStatus: String {
+    public enum SyncStatus: String {
         case pending = "pending"
         case syncing = "syncing"
         case synced = "synced"
@@ -32,14 +33,14 @@ final class SyncManager: ObservableObject {
         case error = "error"
     }
     
-    struct SyncError: Identifiable, Error {
-        let id = UUID()
-        let message: String
-        let date = Date()
-        let objectId: String?
+    public struct SyncError: Identifiable, Error {
+        public let id = UUID()
+        public let message: String
+        public let date = Date()
+        public let objectId: String?
     }
     
-    enum ConflictResolution {
+    public enum ConflictResolution {
         case useLocal
         case useRemote
         case merge
@@ -49,11 +50,34 @@ final class SyncManager: ObservableObject {
     
     private init() {
         setupNetworkMonitoring()
+        setupFirestore()
     }
     
     deinit {
         stopListeners()
         monitor.cancel()
+    }
+    
+    // MARK: - Setup
+    
+    private func setupFirestore() {
+        // Vérifier que Firebase est configuré
+        guard FirebaseApp.app() != nil else {
+            print("⚠️ Firebase n'est pas configuré")
+            return
+        }
+        
+        // Initialiser Firestore
+        self.db = Firestore.firestore()
+        
+        #if DEBUG
+        // Configuration pour l'émulateur en mode debug
+        let settings = FirestoreSettings()
+        settings.host = "127.0.0.1:8080"  // Utiliser 127.0.0.1 au lieu de localhost
+        settings.isPersistenceEnabled = false
+        settings.isSSLEnabled = false
+        self.db?.settings = settings
+        #endif
     }
     
     // MARK: - Network Monitoring
@@ -98,6 +122,10 @@ final class SyncManager: ObservableObject {
         
         guard let workoutId = workout.id?.uuidString else {
             throw SyncError(message: "Invalid workout ID", objectId: nil)
+        }
+        
+        guard let db = db else {
+            throw SyncError(message: "Firestore not initialized", objectId: nil)
         }
         
         await MainActor.run { self.isSyncing = true }
@@ -184,6 +212,8 @@ final class SyncManager: ObservableObject {
     func setupRealtimeListeners(for userId: String) {
         stopListeners() // Nettoyer les anciens listeners
         
+        guard let db = db else { return }
+        
         // Listener pour les workouts de l'utilisateur
         let workoutListener = db.collection(FirebaseStructure.workouts)
             .whereField("userId", isEqualTo: userId)
@@ -224,6 +254,7 @@ final class SyncManager: ObservableObject {
     /// Synchronise plusieurs workouts en batch
     func syncWorkoutsBatch(_ workouts: [Workout]) async throws {
         guard isConnected else { return }
+        guard let db = db else { return }
         
         let batch = db.batch()
         var processedWorkouts: [(workout: Workout, ref: DocumentReference)] = []
@@ -257,6 +288,8 @@ final class SyncManager: ObservableObject {
     // MARK: - Statistics Update
     
     private func updateStatistics(for workout: Workout, userId: String) async throws {
+        guard let db = db else { return }
+        
         // Statistiques globales
         let globalStats = try await calculateGlobalStatistics(userId: userId)
         
@@ -286,6 +319,7 @@ final class SyncManager: ObservableObject {
     }
     
     private func updateExerciseStatistics(_ exercise: Exercise, userId: String) async throws {
+        guard let db = db else { return }
         guard let exerciseName = exercise.name else { return }
         
         let exerciseId = exerciseName.lowercased().replacingOccurrences(of: " ", with: "_")
@@ -337,10 +371,12 @@ final class SyncManager: ObservableObject {
     }
     
     private func updateWorkoutTypeStatistics(_ workout: Workout, templateId: String, userId: String) async throws {
+        guard let db = db else { return }
+        
         let docRef = db.collection(FirebaseStructure.users)
             .document(userId)
             .collection(FirebaseStructure.statistics)
-            .document(FirebaseStructure.Statistics.workouts)  // Ajout de .document()
+            .document(FirebaseStructure.Statistics.workouts)
             .collection(templateId)
             .document(templateId)
         
@@ -425,7 +461,7 @@ final class SyncManager: ObservableObject {
         
         let data = try prepareWorkoutData(workout)
         
-        try await db.collection(FirebaseStructure.workouts)
+        try await db?.collection(FirebaseStructure.workouts)
             .document(workoutId)
             .setData(data, merge: true)
         
@@ -444,7 +480,7 @@ final class SyncManager: ObservableObject {
             throw SyncError(message: "Failed to convert template", objectId: templateId)
         }
         
-        try await db.collection(FirebaseStructure.templates)
+        try await db?.collection(FirebaseStructure.templates)
             .document(templateId)
             .setData(data, merge: true)
         
@@ -567,5 +603,31 @@ final class SyncManager: ObservableObject {
         
         // Par défaut
         return exercise.personalBest ? 100 : 50
+    }
+    
+    public func deleteWorkoutFromFirebase(_ workout: Workout) async throws {
+        guard let workoutId = workout.id?.uuidString else {
+            throw SyncError(message: "Invalid workout ID", objectId: nil)
+        }
+        
+        guard let db = db else {
+            throw SyncError(message: "Firestore not initialized", objectId: nil)
+        }
+        
+        // Supprimer le workout de Firebase
+        try await db.collection(FirebaseStructure.workouts)
+            .document(workoutId)
+            .delete()
+        
+        // Supprimer les statistiques associées
+        if let userId = workout.userId?.uuidString {
+            try await db.collection(FirebaseStructure.users)
+                .document(userId)
+                .collection(FirebaseStructure.statistics)
+                .document(FirebaseStructure.Statistics.workouts)
+                .collection(workoutId)
+                .document(workoutId)
+                .delete()
+        }
     }
 }
