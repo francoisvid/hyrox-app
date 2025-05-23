@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 import Combine
 
 struct ProfileView: View {
@@ -13,7 +14,7 @@ struct ProfileView: View {
                 ActivitySummaryView(vm: vm)
                 GoalsSectionView(formatTime: vm.formatTime)
                 SettingsView(vm: vm)
-                LogoutButton(isLoggedIn: $isLoggedIn)
+                LogoutButton(isLoggedIn: $isLoggedIn, vm: vm) // Passer le ViewModel
                 Text("Version 0.1")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -24,52 +25,8 @@ struct ProfileView: View {
         .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle("Profil")
         .preferredColorScheme(vm.isDarkModeEnabled ? .dark : .light)
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-class ProfileViewModel: ObservableObject {
-    @Published var username = UserDefaults.standard.string(forKey: "username") ?? "Athlète Hyrox"
-    @Published var email    = UserDefaults.standard.string(forKey: "email")    ?? "user@example.com"
-    @AppStorage("isHeartRateMonitoringEnabled") var isHeartRateMonitoringEnabled = true
-    @AppStorage("selectedWeightUnit")            var selectedWeightUnit            = 0
-    @AppStorage("selectedDistanceUnit")          var selectedDistanceUnit          = 0
-    @AppStorage("isDarkModeEnabled")             var isDarkModeEnabled             = true
-
-    // On initialise le manager directement ici
-    private let manager = WorkoutManager(dataController: DataController.shared)
-
-    // Computed properties avant utilisées sur les méthodes manquantes
-    var totalWorkouts: Int {
-        manager.workouts.count
-    }
-    var totalDuration: TimeInterval {
-        manager.workouts.reduce(0) { $0 + $1.duration }
-    }
-    var totalDistance: Double {
-        manager.workouts.reduce(0) { $0 + $1.distance }
-    }
-
-    func formatTime(_ time: TimeInterval) -> String {
-        let m = Int(time) / 60
-        let s = Int(time) % 60
-        return String(format: "%02d:%02d", m, s)
-    }
-
-    func saveUsername(_ newName: String) {
-        username = newName
-        UserDefaults.standard.set(newName, forKey: "username")
-    }
-    
-    func toggleDarkMode() {
-        isDarkModeEnabled.toggle()
-        // Forcer le changement de mode
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            windowScene.windows.forEach { window in
-                window.overrideUserInterfaceStyle = isDarkModeEnabled ? .dark : .light
-            }
+        .onAppear {
+            vm.refreshUserInfo() // Rafraîchir les infos utilisateur à l'apparition
         }
     }
 }
@@ -163,7 +120,7 @@ private struct GoalsSectionView: View {
 private struct ProfileHeaderView: View {
     @ObservedObject var vm: ProfileViewModel
     @State private var editing = false
-    @State private var draft    = ""
+    @State private var draft = ""
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -215,6 +172,18 @@ private struct ProfileHeaderView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+            
+            // Message informatif si le nom est par défaut
+            if vm.username == "Athlète Hyrox" {
+                HStack {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.yellow)
+                    Text("Cliquez sur le crayon pour personnaliser votre nom")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 5)
             }
         }
         .frame(maxWidth: .infinity)
@@ -302,10 +271,22 @@ private struct SettingsView: View {
 
 private struct LogoutButton: View {
     @Binding var isLoggedIn: Bool
+    @ObservedObject var vm: ProfileViewModel
 
     var body: some View {
         Button {
-            isLoggedIn = false
+            // Déconnexion Firebase
+            do {
+                try Auth.auth().signOut()
+                isLoggedIn = false
+                // Optionnel: nettoyer les données locales
+                UserDefaults.standard.removeObject(forKey: "username")
+                UserDefaults.standard.removeObject(forKey: "email")
+            } catch let signOutError as NSError {
+                print("Erreur lors de la déconnexion: \(signOutError.localizedDescription)")
+                // Même en cas d'erreur, déconnecter localement
+                isLoggedIn = false
+            }
         } label: {
             Text("Déconnexion")
                 .font(.headline)

@@ -1,56 +1,9 @@
 import SwiftUI
-import Combine
 
-// MARK: - AuthViewModel
-
-@MainActor
-class AuthViewModel: ObservableObject {
-    @Published var email = "test@email.com"
-    @Published var password = "test"
-    @Published var rememberMe = false
-    @Published var isRegistering = false
-
-    @Published var isLoading = false
-    @Published var showAlert = false
-    @Published var alertMessage = ""
-    @Published var isLoggedIn = false
-
-    var isFormValid: Bool {
-        !email.isEmpty && !password.isEmpty && email.contains("@")
-    }
-
-    func toggleMode() { isRegistering.toggle() }
-
-    func submit() {
-        guard isFormValid else {
-            alertMessage = "Veuillez remplir correctement le formulaire."
-            showAlert = true
-            return
-        }
-        isLoading = true
-        DispatchQueue.main.asyncAfter(deadline: .now()+1.5) {
-            self.isLoading = false
-            if self.isRegistering {
-                self.alertMessage = "Compte créé avec succès !"
-                self.showAlert = true
-                self.isRegistering = false
-            } else {
-                self.isLoggedIn = true
-                if self.rememberMe {
-                    UserDefaults.standard.set(self.email, forKey: "savedEmail")
-                }
-            }
-        }
-    }
-}
-
-// MARK: - LoginView
+// MARK: - SocialLoginView
 
 struct LoginView: View {
     @StateObject private var vm = AuthViewModel()
-    @FocusState private var focusedField: Field?
-
-    enum Field { case email, password }
 
     var body: some View {
         ZStack {
@@ -61,39 +14,23 @@ struct LoginView: View {
             .ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 32) {
+                VStack(spacing: 40) {
+                    Spacer(minLength: 30)
+                    
                     LogoView()
-
-                    ModeToggleView(isRegistering: $vm.isRegistering, action: vm.toggleMode)
-
-                    CredentialsFormView(
-                        email: $vm.email,
-                        password: $vm.password,
-                        rememberMe: $vm.rememberMe,
-                        isRegistering: vm.isRegistering,
-                        isValid: vm.isFormValid
-                    )
-                    .focused($focusedField, equals: .email)
-
-                    Button(action: vm.submit) {
-                        Text(vm.isRegistering ? "Créer un compte" : "Se connecter")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(vm.isFormValid ? Color.yellow : Color.yellow.opacity(0.5))
-                            .cornerRadius(8)
-                    }
-                    .disabled(!vm.isFormValid || vm.isLoading)
-
-                    //SocialLoginButtonsView()
-
-                    Text("En vous connectant, vous acceptez nos Conditions d'utilisation.")
-                        .font(.caption).foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                    
+                    Spacer()
+                    
+                    QuotesView()
+                    
+                    Spacer()
+                                        
+                    SocialLoginButtonsView()
+                        .environmentObject(vm)
+                    
+                    TermsView()
                 }
-                .padding()
+                .padding(.horizontal, 24)
             }
 
             if vm.isLoading {
@@ -113,121 +50,114 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Sous-vues Login
+// MARK: - Sous-vues
 
 private struct LogoView: View {
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 16) {
             Image("logo_myrox")
-                .resizable().frame(width: 80, height: 80)
-                .foregroundColor(.yellow)
+                .resizable()
                 .frame(width: 100, height: 100)
+                .foregroundColor(.yellow)
                 .clipShape(Circle())
                 .overlay(
                     Circle()
                         .stroke(Color.yellow, lineWidth: 4)
                 )
+            
             Text("MyROX")
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 36, weight: .bold))
                 .foregroundColor(.white)
+            
             Text("Entraînez-vous. Suivez et Progressez")
+                .font(.system(size: 16))
                 .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
         }
     }
 }
 
-private struct ModeToggleView: View {
-    @Binding var isRegistering: Bool
-    var action: () -> Void
+private struct QuotesView: View {
+    @State private var currentQuoteIndex = Int.random(in: 0..<MotivationalQuotes.quotes.count)
+    @State private var opacity = 1.0
+    
+    let timer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
     
     var body: some View {
-        HStack(spacing: 0) {
-            Button("Connexion") { if isRegistering { action() } }
-                .toggleStyle(isActive: !isRegistering)
-            Button("Inscription") { if !isRegistering { action() } }
-                .toggleStyle(isActive:  isRegistering)
-        }
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-    }
-}
-
-private extension Button {
-    func toggleStyle(isActive: Bool) -> some View {
-        self
-            .font(.headline)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(isActive ? Color.yellow : Color.clear)
-            .foregroundColor(isActive ? .black : .gray)
-    }
-}
-
-private struct CredentialsFormView: View {
-    @Binding var email: String
-    @Binding var password: String
-    @Binding var rememberMe: Bool
-    let isRegistering: Bool
-    let isValid: Bool
-    
-    @State private var showPassword = false
-    @Environment(\.colorScheme) var scheme
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Image(systemName: "info.circle")
-                    .imageScale(.large)
-                    .foregroundStyle(
-                        Color(.yellow)
-                    )
-                Text("Aucune inscription n'est nécessaire pour le moment, cliquez sur \"Se connecter\"")
+        VStack(spacing: 0) {
+            // Container fixe pour les citations - centré verticalement
+            VStack(spacing: 12) {
+                Text(MotivationalQuotes.quotes[currentQuoteIndex].text)
+                    .font(.system(size: 18, weight: .medium))
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white)
+                    .lineSpacing(2)
+                    .opacity(opacity)
+                
+                Text("- \(MotivationalQuotes.quotes[currentQuoteIndex].author)")
                     .font(.system(size: 14))
-            }
-            // Email
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Email").font(.caption).foregroundColor(.gray)
-                HStack {
-                    Image(systemName: "envelope").foregroundColor(.gray)
-                    TextField("Votre email", text: $email)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                }
-                .padding().background(Color(.systemGray6)).cornerRadius(8)
-            }
-            
-            // Password
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Mot de passe").font(.caption).foregroundColor(.gray)
-                HStack {
-                    Image(systemName: "lock").foregroundColor(.gray)
-                    Group {
-                        if showPassword {
-                            TextField("Mot de passe", text: $password)
-                        } else {
-                            SecureField("Mot de passe", text: $password)
-                        }
-                    }
-                    Button(action: { showPassword.toggle() }) {
-                        Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .foregroundColor(.gray)
-                    }
-                }
-                .padding().background(Color(.systemGray6)).cornerRadius(8)
-            }
-            
-            // Remember Me + Forgot
-            if !isRegistering {
-                HStack {
-                    Toggle("Se souvenir de moi", isOn: $rememberMe)
-                        .toggleStyle(.checkbox)
-                    Spacer()
-                    Button("Mot de passe oublié ?") {
-                        // action
-                    }
                     .foregroundColor(.yellow)
+                    .opacity(opacity)
+            }
+            .frame(height: 100) // Hauteur fixe pour éviter les mouvements
+            .frame(maxWidth: .infinity)
+        }
+        .onReceive(timer) { _ in
+            // Fade out rapide
+            withAnimation(.easeOut(duration: 0.3)) {
+                opacity = 0.0
+            }
+            
+            // Changer la citation puis fade in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                currentQuoteIndex = (currentQuoteIndex + 1) % MotivationalQuotes.quotes.count
+                
+                withAnimation(.easeIn(duration: 0.3)) {
+                    opacity = 1.0
                 }
             }
+        }
+    }
+}
+
+private struct SocialLoginButtonsView: View {
+    @EnvironmentObject var vm: AuthViewModel
+
+    var body: some View {
+        VStack(spacing: 24) {
+            // Texte juste au-dessus du bouton
+            VStack(spacing: 16) {
+                Text("Prêt à vous entraîner ?")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text("Accédez à vos séances HYROX et suivez vos performances en temps réel")
+                    .font(.system(size: 15))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            
+            // Bouton Apple
+            SocialButton(
+                icon: "apple.logo",
+                text: "Continuer avec Apple",
+                backgroundColor: .white,
+                textColor: .black
+            ) {
+                vm.signInWithApple()
+            }
+            
+            // Bouton Google (pour plus tard)
+//            SocialButton(
+//                icon: "g.circle.fill",
+//                text: "Continuer avec Google",
+//                backgroundColor: Color(.systemGray5),
+//                textColor: .white
+//            ) {
+//                // TODO: Implémenter Google Sign-In plus tard
+//                print("Google Sign-In - À implémenter")
+//            }
         }
     }
 }
@@ -235,67 +165,74 @@ private struct CredentialsFormView: View {
 private struct SocialButton: View {
     let icon: String
     let text: String
+    let backgroundColor: Color
+    let textColor: Color
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(.white)
+                    .font(.title2)
+                    .foregroundColor(textColor)
+                
                 Text(text)
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(textColor)
             }
             .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.systemGray5))
-            .cornerRadius(8)
+            .padding(.vertical, 16)
+            .background(backgroundColor)
+            .cornerRadius(12)
         }
+        .buttonStyle(ScaleButtonStyle())
     }
 }
 
-private struct SocialLoginButtonsView: View {
+private struct TermsView: View {
     var body: some View {
-        VStack(spacing: 12) {
-            SocialButton(icon: "g.circle.fill", text: "Continuer avec Google") { /*…*/ }
-            SocialButton(icon: "apple.logo",   text: "Continuer avec Apple")  { /*…*/ }
-        }
+        Text("En vous connectant, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité.")
+            .font(.system(size: 12))
+            .foregroundColor(.gray)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal)
     }
 }
 
 private struct LoadingOverlayView: View {
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5).ignoresSafeArea()
-            ProgressView("Chargement…")
-                .progressViewStyle(.circular)
-                .foregroundColor(.white)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                    .scaleEffect(1.2)
+                
+                Text("Connexion en cours...")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            .padding(24)
+            .background(Color(.systemGray6))
+            .cornerRadius(16)
         }
     }
 }
 
-// MARK: - Checkbox ToggleStyle
+// MARK: - Button Style
 
-private struct CheckboxToggleStyle: ToggleStyle {
+private struct ScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
-                .foregroundColor(configuration.isOn ? .yellow : .gray)
-                .onTapGesture { configuration.isOn.toggle() }
-            configuration.label
-        }
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
-private extension ToggleStyle where Self == CheckboxToggleStyle {
-    static var checkbox: CheckboxToggleStyle { .init() }
-}
-
-// MARK: - Color hex initializer (move to Extensions/Color+Hex.swift)
+// MARK: - Color hex initializer
 
 extension Color {
     init(hex: String) {

@@ -3,6 +3,7 @@
 import SwiftUI
 import CoreData
 import WatchConnectivity
+import FirebaseCore
 
 @main
 struct HyroxApp: App {
@@ -15,6 +16,8 @@ struct HyroxApp: App {
     
     init() {
         print("🚀 Initialisation de l'application iOS")
+        //FirebaseConfig.shared.configure()
+        FirebaseApp.configure()
         
         // Activer la session explicitement
         if WCSession.isSupported() {
