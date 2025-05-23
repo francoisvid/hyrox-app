@@ -3,10 +3,12 @@ import CoreData
 import WatchConnectivity
 
 /// Gère Core Data + synchronisation via Persistent History + WCSession
-final class DataController: NSObject, WCSessionDelegate {
+final class DataController: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = DataController()
      
      let container: NSPersistentContainer
+    
+    @Published var dummyFlag = false
      
      // Pour stocker le dernier token d'historique en App Group
      private var lastToken: NSPersistentHistoryToken? {
@@ -50,12 +52,12 @@ final class DataController: NSObject, WCSessionDelegate {
         super.init()
         
         // Ajouter l'observation de sauvegarde de contexte
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(contextDidSave(_:)),
-            name: .NSManagedObjectContextDidSave,
-            object: container.viewContext
-        )
+//        NotificationCenter.default.addObserver(
+//            self,
+//            selector: #selector(contextDidSave(_:)),
+//            name: .NSManagedObjectContextDidSave,
+//            object: container.viewContext
+//        )
     }
 
     func sendPendingChanges() {
@@ -171,68 +173,24 @@ final class DataController: NSObject, WCSessionDelegate {
          let context = container.viewContext
          DataSeeder.seedInitialData(in: context)
      }
-    
-    // MARK: - WCSessionDelegate
-    // 📥 Nouveau callback pour récupérer le userInfo
-    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
-        guard let historyPayload = userInfo["history"] as? [[String:Any]] else {
-            print("⚠️ didReceiveUserInfo: pas de clé `history`")
-            return
-        }
-
-        let bg = container.newBackgroundContext()
-        bg.perform {
-            for dict in historyPayload {
-                guard
-                    let uriString = dict["id"] as? String,
-                    let url       = URL(string: uriString),
-                    let objID     = bg.persistentStoreCoordinator?
-                                      .managedObjectID(forURIRepresentation: url),
-                    let rawType   = dict["type"] as? Int
-                else { continue }
-
-                do {
-                    let obj = try bg.existingObject(with: objID)
-                    if rawType == NSPersistentHistoryChangeType.insert.rawValue ||
-                       rawType == NSPersistentHistoryChangeType.update.rawValue {
-                        if let values = dict["values"] as? [String:Any] {
-                            values.forEach { key, val in
-                                obj.setValue(val is NSNull ? nil : val, forKey: key)
-                            }
-                        }
-                    } else if rawType == NSPersistentHistoryChangeType.delete.rawValue {
-                        bg.delete(obj)
-                    }
-                } catch {
-                    print("Merge error:", error)
-                }
-            }
-            do {
-                try bg.save()
-                print("✅ Merged \(historyPayload.count) changes from Watch")
-            } catch {
-                print("❌ Failed saving merged data:", error)
-            }
-        }
-    }
 
     func clearAllData() {
         let context = container.viewContext
-        
-        // Supprimer tous les workouts (les exercices associés seront également supprimés par cascade)
+
         let workoutFetchRequest: NSFetchRequest<NSFetchRequestResult> = Workout.fetchRequest()
         let workoutDeleteRequest = NSBatchDeleteRequest(fetchRequest: workoutFetchRequest)
-        
+
         do {
             try container.persistentStoreCoordinator.execute(workoutDeleteRequest, with: context)
-            
-            // Réinitialiser le token d'historique
             lastToken = nil
-            
-            // Sauvegarder les changements
             try context.save()
             
             print("✅ Toutes les données ont été supprimées avec succès")
+
+            // 🔁 Assurer la mise à jour sur le thread principal
+            DispatchQueue.main.async {
+                self.objectWillChange.send()
+            }
         } catch {
             print("❌ Erreur lors de la suppression des données: \(error)")
         }
@@ -249,9 +207,9 @@ final class DataController: NSObject, WCSessionDelegate {
         }
     }
     
-    @objc private func contextDidSave(_ notification: Notification) {
-        DataSyncManager.shared.sendPendingChanges()
-    }
+//    @objc private func contextDidSave(_ notification: Notification) {
+//        DataSyncManager.shared.sendPendingChanges()
+//    }
     
     func session(_ session: WCSession,
                  activationDidCompleteWith state: WCSessionActivationState,

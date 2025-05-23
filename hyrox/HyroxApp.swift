@@ -14,6 +14,9 @@ struct HyroxApp: App {
     private let syncManager: DataSyncManager
     private let firebaseSyncManager: SyncManager
     
+    // Flag pour éviter la synchronisation multiple
+    @State private var hasPerformedInitialSync = false
+    
     init() {
         print("🚀 Initialisation de l'application iOS")
         
@@ -59,8 +62,44 @@ struct HyroxApp: App {
                         if WCSession.default.activationState == .activated {
                             print("📱 WCSession reachable: \(WCSession.default.isReachable)")
                         }
+                        
+                        // Synchronisation initiale au premier lancement
+                        if !hasPerformedInitialSync {
+                            hasPerformedInitialSync = true
+                            performInitialSync()
+                        }
                     }
                 }
+        }
+    }
+    
+    private func performInitialSync() {
+        Task {
+            do {
+                print("🔄 Début de la synchronisation initiale")
+                
+                // Attendre un peu que tout soit initialisé
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconde
+                
+                // 1. Charger les workouts depuis Firebase
+                let workoutManager = WorkoutManager()
+                try await workoutManager.loadWorkoutsFromFirebase()
+                print("✅ Workouts chargés depuis Firebase")
+                
+                // 2. Demander les workouts de la Watch si elle est connectée
+                if WCSession.default.isReachable {
+                    syncManager.forceSendAllWorkouts()
+                    print("📱 Demande de synchronisation envoyée à la Watch")
+                } else {
+                    print("⌚️ Watch non accessible pour la synchronisation")
+                }
+                
+                // 3. Envoyer les objectifs à la Watch
+                syncManager.sendGoals()
+                
+            } catch {
+                print("❌ Erreur lors de la synchronisation initiale: \(error)")
+            }
         }
     }
 }

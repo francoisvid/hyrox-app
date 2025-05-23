@@ -39,6 +39,22 @@ struct WatchWorkoutView: View {
         .onAppear {
             viewModel.reloadWorkouts()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutsDeleted"))) { _ in
+            print("🔄 Rafraîchissement après suppression complète")
+            viewModel.reloadWorkouts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutDeleted"))) { _ in
+            print("🔄 Rafraîchissement après suppression d'un workout")
+            viewModel.reloadWorkouts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutReceived"))) { _ in
+            print("🔄 Rafraîchissement après réception d'un workout")
+            viewModel.reloadWorkouts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutCompleted"))) { _ in
+            print("🔄 Rafraîchissement après workout terminé")
+            viewModel.reloadWorkouts()
+        }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextDidSave,
@@ -70,66 +86,6 @@ struct WatchWorkoutView: View {
                 .font(.subheadline)
                 .foregroundColor(Color.secondary)
             
-            // Status de synchronisation
-//            Button(action: { showSyncStatus.toggle() }) {
-//                Text("Sync Info")
-//                    .font(.caption)
-//                    .foregroundColor(.gray)
-//            }
-            
-//            if showSyncStatus {
-//                VStack(alignment: .leading, spacing: 2) {
-//                    Text("Session: \(WCSession.default.activationState.rawValue)")
-//                    Text("Reachable: \(WCSession.default.isReachable ? "✅" : "❌")")
-//                    Text("Companion: \(WCSession.default.isCompanionAppInstalled ? "✅" : "❌")")
-//                    
-//                    // Bouton pour forcer un message test
-//                    Button("Force Test Message") {
-//                        DataSyncManager.shared.forceSendTestMessage()
-//                    }
-//                    .font(.system(size: 10))
-//                    .padding(3)
-//                    .background(Color.blue.opacity(0.5))
-//                    .cornerRadius(4)
-//                }
-//                .font(.system(size: 9))
-//                .foregroundColor(.gray)
-//                .padding(5)
-//                .background(Color.black.opacity(0.5))
-//                .cornerRadius(5)
-//            }
-//            
-//            if showDebug {
-//                Text(debugMessage)
-//                    .font(.caption)
-//                    .foregroundColor(.green)
-//                    .padding()
-//                    .background(Color.black.opacity(0.8))
-//                    .cornerRadius(8)
-//            }
-//            
-//            Button("🚀 DIRECT") {
-//                sendDirectTestData()
-//            }
-//            
-//            Button("🧪 TEST") {
-//                createTestWorkout()
-//            }
-            
-//            Button("📊 FORCE SYNC") {
-//                DataSyncManager.shared.forceSendAllWorkouts()
-//            }
-//            
-//            if showDebug {
-//                Text(debugMessage)
-//                    .font(.caption)
-//                    .foregroundColor(.green)
-//                    .frame(maxWidth: .infinity, alignment: .leading)
-//                    .padding(5)
-//                    .background(Color.black.opacity(0.8))
-//                    .cornerRadius(8)
-//            }
-            
             Button("DÉMARRER") {
                 let newWorkout: () = viewModel.startWorkout()
                 viewModel.saveAndSync()
@@ -138,11 +94,6 @@ struct WatchWorkoutView: View {
             .buttonStyle(.borderedProminent)
             .tint(Color.yellow)
             .foregroundColor(Color.black)
-            
-            Button("🧹 EFFACER TOUT") {
-                clearAllData()
-            }
-            .foregroundColor(.red)
         }
     }
 
@@ -546,6 +497,30 @@ struct WatchWorkoutView: View {
         )
     }
 }
+// MARK;: - Sync All Local Workouts to iPhone
+import CoreData
+import WatchConnectivity
+
+// MARK: - Receiving Deleted Workout IDs
+// Cette fonction permet de supprimer localement les workouts dont les IDs sont reçus
+private func receiveDeletedWorkoutIDs(_ ids: [String], reloadCallback: @escaping () -> Void) {
+    let context = DataController.shared.container.viewContext
+    let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+    fetchRequest.predicate = NSPredicate(format: "id IN %@", ids)
+
+    do {
+        let workouts = try context.fetch(fetchRequest)
+        for workout in workouts {
+            context.delete(workout)
+        }
+        try context.save()
+        reloadCallback()
+    } catch {
+        print("❌ Erreur suppression workouts:", error)
+    }
+}
+
+
 #Preview {
     // Utiliser une fonction séparée pour créer tous les objets nécessaires
     let previewSetup = setupPreview()
