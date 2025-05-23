@@ -164,6 +164,7 @@ private struct ImprovedChartView: View {
     private var minTime: TimeInterval {
         data.map(\.1).min().map { max(0, $0 * 0.9) } ?? 0
     }
+    
     private var maxTime: TimeInterval {
         data.map(\.1).max().map { $0 * 1.1 } ?? 3600
     }
@@ -185,35 +186,49 @@ private struct ImprovedChartView: View {
             .padding(.horizontal, 12)
             .padding(.top, 12)
 
-            // Zone graphique sans padding horizontal !
-            GeometryReader { geo in
-                ZStack {
-                    ChartFill(
-                        data: data,
-                        minTime: minTime,
-                        maxTime: maxTime,
-                        size: geo.size
-                    )
-                    ChartLine(
-                        data: data,
-                        minTime: minTime,
-                        maxTime: maxTime,
-                        size: geo.size
-                    )
+            // Zone graphique
+            if data.isEmpty {
+                // Message si pas de données
+                Text("Pas encore de données")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                GeometryReader { geo in
+                    ZStack {
+                        // Grille de fond (optionnel)
+                        GridBackground(size: geo.size)
+                        
+                        ChartFill(
+                            data: data,
+                            minTime: minTime,
+                            maxTime: maxTime,
+                            size: geo.size
+                        )
+                        
+                        ChartLine(
+                            data: data,
+                            minTime: minTime,
+                            maxTime: maxTime,
+                            size: geo.size
+                        )
+                    }
                 }
             }
 
-            // Axe X sans décalage
-            HStack(spacing: 0) {
-                ForEach(data.indices, id: \.self) { i in
-                    Text(dateFormatter.string(from: data[i].0))
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity)
+            // Axe X
+            if !data.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(data.indices, id: \.self) { i in
+                        Text(dateFormatter.string(from: data[i].0))
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
         }
     }
 }
@@ -227,20 +242,47 @@ private struct ChartLine: View {
     var body: some View {
         Path { path in
             let pts = scaledPoints()
-            guard pts.count > 1 else { return }
-            path.move(to: pts[0])
-            for p in pts.dropFirst() { path.addLine(to: p) }
+            guard pts.count > 0 else { return }  // Changé de > 1 à > 0
+            
+            if pts.count == 1 {
+                // Si un seul point, dessiner un point
+                path.addEllipse(in: CGRect(x: pts[0].x - 3, y: pts[0].y - 3, width: 6, height: 6))
+            } else {
+                // Si plusieurs points, dessiner la ligne
+                path.move(to: pts[0])
+                for p in pts.dropFirst() {
+                    path.addLine(to: p)
+                }
+            }
         }
         .stroke(Color.yellow, lineWidth: 2)
+        
+        // Ajouter des points sur la ligne
+        ZStack {
+            ForEach(scaledPoints().indices, id: \.self) { i in
+                Circle()
+                    .fill(Color.yellow)
+                    .frame(width: 6, height: 6)
+                    .position(scaledPoints()[i])
+            }
+        }
     }
 
     private func scaledPoints() -> [CGPoint] {
         let w = size.width
         let h = size.height
         let range = maxTime - minTime
+        
+        // Protection contre la division par zéro
+        if data.count == 1 {
+            // Un seul point au centre
+            let y = range > 0 ? h * (1 - CGFloat((data[0].1 - minTime) / range)) : h / 2
+            return [CGPoint(x: w / 2, y: y)]
+        }
+        
         return data.enumerated().map { i, pair in
             let x = (w / CGFloat(data.count - 1)) * CGFloat(i)
-            let y = h * (1 - CGFloat((pair.1 - minTime) / range))
+            let y = range > 0 ? h * (1 - CGFloat((pair.1 - minTime) / range)) : h / 2
             return CGPoint(x: x, y: y)
         }
     }
@@ -256,8 +298,12 @@ private struct ChartFill: View {
         Path { path in
             let pts = scaledPoints()
             guard !pts.isEmpty else { return }
+            
             path.move(to: CGPoint(x: pts[0].x, y: size.height))
-            for p in pts { path.addLine(to: p) }
+            for p in pts {
+                path.addLine(to: p)
+            }
+            
             if let last = pts.last {
                 path.addLine(to: CGPoint(x: last.x, y: size.height))
             }
@@ -277,9 +323,17 @@ private struct ChartFill: View {
         let w = size.width
         let h = size.height
         let range = maxTime - minTime
+        
+        // Protection contre la division par zéro
+        if data.count == 1 {
+            // Un seul point au centre
+            let y = range > 0 ? h * (1 - CGFloat((data[0].1 - minTime) / range)) : h / 2
+            return [CGPoint(x: w / 2, y: y)]
+        }
+        
         return data.enumerated().map { i, pair in
             let x = (w / CGFloat(data.count - 1)) * CGFloat(i)
-            let y = h * (1 - CGFloat((pair.1 - minTime) / range))
+            let y = range > 0 ? h * (1 - CGFloat((pair.1 - minTime) / range)) : h / 2
             return CGPoint(x: x, y: y)
         }
     }
@@ -537,6 +591,23 @@ private struct NoDataView: View {
         .padding(.vertical, 60)
         .background(Color(.systemGray6))
         .cornerRadius(12)
+    }
+}
+
+// Optionnel : Ajouter une grille de fond
+private struct GridBackground: View {
+    let size: CGSize
+    
+    var body: some View {
+        Path { path in
+            // Lignes horizontales
+            for i in 0...4 {
+                let y = size.height * CGFloat(i) / 4
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+            }
+        }
+        .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
     }
 }
 
