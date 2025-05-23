@@ -1,0 +1,256 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ========================
+    // FONCTIONS UTILITAIRES
+    // ========================
+    
+    // Authentification
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isCreator() {
+      return isAuthenticated() && 
+             resource.data.creatorId == request.auth.uid;
+    }
+    
+    // Visibilité
+    function isPublic() {
+      return resource.data.isPublic == true;
+    }
+    
+    function canAccessWorkout() {
+      return resource.data.userId == request.auth.uid ||
+             (resource.data.sharedWith != null && 
+              resource.data.sharedWith[request.auth.uid] == true);
+    }
+    
+    // Rate limiting
+    function isNotRateLimited() {
+      return !("lastUpdate" in resource.data) || 
+             request.time > resource.data.lastUpdate + duration.value(1, 'm');
+    }
+    
+    // Validation des requêtes
+    function hasValidLimit() {
+      return request.query.limit != null && 
+             request.query.limit <= 100;
+    }
+    
+    function hasValidSharing() {
+      return !("sharedWith" in request.resource.data) || 
+             (request.resource.data.sharedWith is map &&
+              request.resource.data.sharedWith.size() <= 50);
+    }
+    
+    // Validation des tailles
+    function isValidStringField(field, minSize, maxSize) {
+      return field is string && 
+             field.size() >= minSize && 
+             field.size() <= maxSize;
+    }
+    
+    // ========================
+    // VALIDATION DES DONNÉES
+    // ========================
+    
+    function isValidUser() {
+      return request.resource.data.keys().hasAll(['email', 'displayName', 'createdAt']) &&
+             isValidStringField(request.resource.data.email, 5, 255) &&
+             request.resource.data.email.matches('[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}') &&
+             isValidStringField(request.resource.data.displayName, 1, 100) &&
+             request.resource.data.createdAt is timestamp;
+    }
+    
+    function isValidWorkout() {
+      return request.resource.data.keys().hasAll(['userId', 'name', 'date', 'version']) &&
+             request.resource.data.userId is string &&
+             isValidStringField(request.resource.data.name, 1, 100) &&
+             request.resource.data.date is timestamp &&
+             request.resource.data.version is number &&
+             request.resource.data.version >= 0 &&
+             request.resource.data.duration is number &&
+             request.resource.data.duration >= 0 &&
+             request.resource.data.distance is number &&
+             request.resource.data.distance >= 0 &&
+             hasValidSharing();
+    }
+    
+    function isValidTemplate() {
+      return request.resource.data.keys().hasAll(['name', 'category', 'difficulty', 'creatorId', 'version']) &&
+             isValidStringField(request.resource.data.name, 1, 100) &&
+             request.resource.data.category in ['strength', 'cardio', 'hybrid', 'custom', 'hyrox'] &&
+             request.resource.data.difficulty in ['beginner', 'intermediate', 'advanced', 'expert'] &&
+             request.resource.data.creatorId is string &&
+             request.resource.data.version is number &&
+             request.resource.data.version >= 0 &&
+             request.resource.data.estimatedDuration is number &&
+             request.resource.data.estimatedDuration >= 0 &&
+             (!("description" in request.resource.data) || 
+              isValidStringField(request.resource.data.description, 0, 500));
+    }
+    
+    function isValidExercise() {
+      return request.resource.data.keys().hasAll(['name', 'type', 'order', 'version']) &&
+             isValidStringField(request.resource.data.name, 1, 100) &&
+             request.resource.data.type in ['distance', 'time', 'reps', 'weight', 'custom'] &&
+             request.resource.data.order is number &&
+             request.resource.data.order >= 0 &&
+             request.resource.data.order < 100 && // Max 100 exercices
+             request.resource.data.version is number &&
+             request.resource.data.version >= 0 &&
+             (!("description" in request.resource.data) || 
+              isValidStringField(request.resource.data.description, 0, 500));
+    }
+    
+    function isValidHeartRate() {
+      return request.resource.data.keys().hasAll(['timestamp', 'value', 'userId']) &&
+             request.resource.data.timestamp is timestamp &&
+             request.resource.data.value is number &&
+             request.resource.data.value > 0 &&
+             request.resource.data.value < 250 && // Fréquence cardiaque réaliste
+             request.resource.data.userId is string;
+    }
+    
+    // ========================
+    // RÈGLES - UTILISATEURS
+    // ========================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      
+      allow create: if isOwner(userId) && 
+                      isValidUser();
+      
+      allow update: if isOwner(userId) && 
+                      isNotRateLimited() &&
+                      isValidUser() &&
+                      request.resource.data.email == resource.data.email && // Email immutable
+                      request.resource.data.createdAt == resource.data.createdAt; // Date création immutable
+      
+      allow delete: if false; // Protection contre suppression accidentelle
+      
+      // Statistiques utilisateur
+      match /statistics/{statType}/{document=**} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Cloud Functions uniquement
+      }
+    }
+    
+    // ========================
+    // RÈGLES - WORKOUTS
+    // ========================
+    
+    match /workouts/{workoutId} {
+      allow read: if isAuthenticated() && canAccessWorkout();
+      
+      allow list: if isAuthenticated() && 
+                    hasValidLimit() &&
+                    request.query.where != null; // Force une requête filtrée
+      
+      allow create: if isAuthenticated() && 
+                      isValidWorkout() && 
+                      request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isAuthenticated() && 
+                      isNotRateLimited() && 
+                      canAccessWorkout() &&
+                      isValidWorkout() &&
+                      request.resource.data.userId == resource.data.userId && // userId immutable
+                      request.resource.data.id == resource.data.id; // id immutable
+      
+      allow delete: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+      
+      // Fréquences cardiaques
+      match /heartRates/{pointId} {
+        allow read: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+        
+        allow create: if isAuthenticated() && 
+                        isValidHeartRate() &&
+                        request.resource.data.userId == request.auth.uid;
+        
+        allow update: if false; // Les points ne sont pas modifiables
+        
+        allow delete: if isAuthenticated() && 
+                        resource.data.userId == request.auth.uid;
+        
+        allow list: if isAuthenticated() && 
+                      hasValidLimit();
+      }
+      
+      // Exercices du workout
+      match /exercises/{exerciseId} {
+        allow read: if isAuthenticated() && 
+                      get(/databases/$(database)/documents/workouts/$(workoutId)).data.userId == request.auth.uid;
+        
+        allow write: if isAuthenticated() && 
+                       get(/databases/$(database)/documents/workouts/$(workoutId)).data.userId == request.auth.uid &&
+                       isValidExercise();
+      }
+    }
+    
+    // ========================
+    // RÈGLES - TEMPLATES
+    // ========================
+    
+    match /templates/{templateId} {
+      allow read: if isAuthenticated() && 
+                    (isPublic() || isCreator());
+      
+      allow list: if isAuthenticated() && 
+                    hasValidLimit();
+      
+      allow create: if isAuthenticated() && 
+                      isValidTemplate() && 
+                      request.resource.data.creatorId == request.auth.uid;
+      
+      allow update: if isCreator() && 
+                      isNotRateLimited() && 
+                      isValidTemplate() &&
+                      request.resource.data.creatorId == resource.data.creatorId && // creatorId immutable
+                      request.resource.data.id == resource.data.id; // id immutable
+      
+      allow delete: if isCreator() && 
+                      !isPublic(); // Empêcher suppression des templates publics
+      
+      // Exercices du template
+      match /exercises/{exerciseId} {
+        allow read: if isAuthenticated() && 
+                      (get(/databases/$(database)/documents/templates/$(templateId)).data.isPublic == true ||
+                       get(/databases/$(database)/documents/templates/$(templateId)).data.creatorId == request.auth.uid);
+        
+        allow write: if isAuthenticated() && 
+                       isNotRateLimited() && 
+                       get(/databases/$(database)/documents/templates/$(templateId)).data.creatorId == request.auth.uid &&
+                       isValidExercise();
+      }
+    }
+    
+    // ========================
+    // RÈGLES - STATISTIQUES GLOBALES
+    // ========================
+    
+    match /statistics/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Cloud Functions uniquement
+    }
+    
+    // ========================
+    // RÈGLES - COLLECTIONS SYSTÈME
+    // ========================
+    
+    // Pour les futures collections (challenges, leaderboards, etc.)
+    match /{collection}/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
