@@ -3,11 +3,9 @@
 import Foundation
 import CoreData
 import Combine
+import WatchConnectivity
 #if os(iOS)
 import FirebaseFirestore
-import WatchConnectivity
-#else
-import WatchConnectivity
 #endif
 
 @MainActor

@@ -45,9 +45,22 @@ class WorkoutViewModel: ObservableObject {
         }
         .store(in: &cancellables)
         
+        // Observer les notifications de nouveaux templates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNewTemplate),
+            name: NSNotification.Name("WorkoutTemplateReceived"),
+            object: nil
+        )
+        
         // Charger les templates et les workouts
         loadTemplates()
         reloadWorkouts()
+    }
+
+    @objc private func handleNewTemplate() {
+        print("🔵 WorkoutViewModel - Nouveau template reçu")
+        loadTemplates()
     }
 
     // MARK: - Actions
@@ -120,7 +133,8 @@ class WorkoutViewModel: ObservableObject {
         }
         
         // Sauvegarder et synchroniser
-        saveAndSync()
+        DataController.shared.saveContext()
+        DataSyncManager.shared.sendWorkoutTemplate(template)
         loadTemplates()
         print("🔵 WorkoutViewModel - Template créé: \(template.id?.uuidString ?? "nil")")
     }

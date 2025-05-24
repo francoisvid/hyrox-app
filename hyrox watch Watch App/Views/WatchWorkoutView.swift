@@ -76,6 +76,16 @@ struct WatchWorkoutView: View {
                 .font(.title2).bold()
                 .foregroundColor(Color.white)
             
+            // Liste des templates
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(viewModel.templates) { template in
+                        templateCard(template: template)
+                    }
+                }
+            }
+            .frame(height: 150)
+            
             // Ajout du compteur de workouts
             Text("\(viewModel.workouts.count) workouts enregistrés")
                 .font(.subheadline)
@@ -86,7 +96,7 @@ struct WatchWorkoutView: View {
                 .font(.subheadline)
                 .foregroundColor(Color.secondary)
             
-            Button("DÉMARRER") {
+            Button("NOUVEAU WORKOUT") {
                 let newWorkout: () = viewModel.startWorkout()
                 viewModel.saveAndSync()
                 currentExerciseIndex = 0
@@ -94,7 +104,80 @@ struct WatchWorkoutView: View {
             .buttonStyle(.borderedProminent)
             .tint(Color.yellow)
             .foregroundColor(Color.black)
+            
+            // Bouton de synchronisation des templates
+            Button("SYNC TEMPLATES") {
+                print("⌚️ Demande de synchronisation des templates...")
+                let message: [String: Any] = [
+                    "action": "requestAllTemplates",
+                    "timestamp": Date().timeIntervalSince1970
+                ]
+                
+                if WCSession.default.isReachable {
+                    WCSession.default.sendMessage(message, replyHandler: { reply in
+                        print("⌚️ Réponse reçue de l'iPhone:", reply)
+                        if let status = reply["status"] as? String,
+                           status == "success",
+                           let type = reply["type"] as? String,
+                           type == "templates_sync",
+                           let templates = reply["templates"] as? [[String: Any]] {
+                            print("⌚️ Traitement de \(templates.count) templates reçus")
+                            DataSyncManager.shared.processReceivedMessage(["history": templates])
+                        } else {
+                            print("⌚️ Format de réponse invalide:", reply)
+                        }
+                    }) { error in
+                        print("❌ Erreur envoi demande de synchronisation:", error)
+                        WCSession.default.transferUserInfo(message)
+                    }
+                } else {
+                    print("⌚️ iPhone non accessible, utilisation de transferUserInfo")
+                    WCSession.default.transferUserInfo(message)
+                }
+            }
+            .buttonStyle(.bordered)
+            .tint(Color.blue)
+            .foregroundColor(Color.white)
         }
+    }
+
+    private func templateCard(template: WorkoutTemplate) -> some View {
+        VStack(spacing: 5) {
+            Text(template.name ?? "Sans nom")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            if let description = template.workoutDescription, !description.isEmpty {
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
+            
+            // Afficher la durée estimée
+            Text("\(Int(template.estimatedDuration / 60)) min")
+                .font(.caption)
+                .foregroundColor(.yellow)
+            
+            // Afficher le nombre d'exercices
+            if let exercises = template.exercises as? Set<ExerciseTemplate> {
+                Text("\(exercises.count) exercices")
+                    .font(.caption)
+                    .foregroundColor(.cyan)
+            }
+            
+            Button("DÉMARRER") {
+                print("⌚️ Démarrage d'un workout depuis le template:", template.name ?? "Sans nom")
+                viewModel.startWorkout(from: template)
+                currentExerciseIndex = 0
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.green)
+            .foregroundColor(Color.black)
+        }
+        .padding(8)
+        .background(Color.gray.opacity(0.2))
+        .cornerRadius(8)
     }
 
     // MARK: - Active Workout

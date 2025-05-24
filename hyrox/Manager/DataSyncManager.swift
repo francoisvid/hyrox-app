@@ -255,6 +255,173 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
             return
         }
         
+        // Traiter les messages d'action
+        if let action = message["action"] as? String {
+            switch action {
+            case "requestAllWorkouts":
+                print("📥 Demande de synchronisation des workouts reçue")
+                #if os(iOS)
+                // Sur iOS, on envoie tous les workouts
+                let context = container.viewContext
+                let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+                
+                do {
+                    let workouts = try context.fetch(fetchRequest)
+                    print("📤 Envoi de \(workouts.count) workouts vers la Watch")
+                    
+                    // Créer le payload pour tous les workouts
+                    var historyItems: [[String: Any]] = []
+                    
+                    for workout in workouts {
+                        guard let workoutId = workout.id?.uuidString else { continue }
+                        
+                        // Données du workout
+                        var workoutData: [String: Any] = [
+                            "id": workoutId,
+                            "name": workout.name ?? "Unnamed",
+                            "duration": workout.duration,
+                            "completed": workout.completed,
+                            "distance": workout.distance,
+                            "date": workout.date?.timeIntervalSince1970 ?? 0
+                        ]
+                        
+                        // Ajouter le workout
+                        historyItems.append([
+                            "entity": "Workout",
+                            "id": workoutId,
+                            "type": 0, // Insert
+                            "values": workoutData
+                        ])
+                        
+                        // Ajouter les exercices
+                        if let exercises = workout.exercises as? Set<Exercise> {
+                            for exercise in exercises {
+                                guard let exerciseId = exercise.id?.uuidString else { continue }
+                                
+                                let exerciseData: [String: Any] = [
+                                    "id": exerciseId,
+                                    "name": exercise.name ?? "Unnamed",
+                                    "duration": exercise.duration,
+                                    "distance": exercise.distance,
+                                    "repetitions": exercise.repetitions,
+                                    "workoutID": workoutId,
+                                    "order": exercise.order,
+                                    "personalBest": exercise.personalBest,
+                                    "date": exercise.date?.timeIntervalSince1970 ?? 0
+                                ]
+                                
+                                historyItems.append([
+                                    "entity": "Exercise",
+                                    "id": exerciseId,
+                                    "type": 0, // Insert
+                                    "values": exerciseData
+                                ])
+                            }
+                        }
+                    }
+                    
+                    let response: [String: Any] = [
+                        "status": "success",
+                        "type": "workouts_sync",
+                        "workouts": historyItems
+                    ]
+                    replyHandler(response)
+                } catch {
+                    print("❌ Erreur récupération workouts:", error)
+                    replyHandler(["status": "error", "message": "fetch_error"])
+                }
+                #else
+                // Sur watchOS, on ne devrait pas recevoir cette action
+                replyHandler(["status": "error", "message": "invalid_platform"])
+                #endif
+                return
+                
+            case "requestAllTemplates":
+                print("📥 Demande de synchronisation des templates reçue")
+                #if os(iOS)
+                // Sur iOS, on envoie tous les templates
+                let context = container.viewContext
+                let fetchRequest: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+                
+                do {
+                    let templates = try context.fetch(fetchRequest)
+                    print("📤 Envoi de \(templates.count) templates vers la Watch")
+                    
+                    // Créer le payload pour tous les templates
+                    var historyItems: [[String: Any]] = []
+                    
+                    for template in templates {
+                        guard let templateId = template.id?.uuidString else { continue }
+                        
+                        // Données du template
+                        var templateData: [String: Any] = [
+                            "id": templateId,
+                            "name": template.name ?? "Unnamed",
+                            "workoutDescription": template.workoutDescription ?? "",
+                            "estimatedDuration": template.estimatedDuration,
+                            "isPublic": template.isPublic,
+                            "category": template.category ?? "",
+                            "difficulty": template.difficulty ?? "",
+                            "createdAt": template.createdAt?.timeIntervalSince1970 ?? 0
+                        ]
+                        
+                        // Ajouter le template
+                        historyItems.append([
+                            "entity": "WorkoutTemplate",
+                            "id": templateId,
+                            "type": 0, // Insert
+                            "values": templateData
+                        ])
+                        
+                        // Ajouter les exercices du template
+                        if let exercises = template.exercises as? Set<ExerciseTemplate> {
+                            for exercise in exercises {
+                                guard let exerciseId = exercise.id?.uuidString else { continue }
+                                
+                                let exerciseData: [String: Any] = [
+                                    "id": exerciseId,
+                                    "name": exercise.name ?? "Unnamed",
+                                    "defaultDuration": exercise.defaultDuration,
+                                    "defaultDistance": exercise.defaultDistance,
+                                    "defaultRepetitions": exercise.defaultRepetitions,
+                                    "order": exercise.order,
+                                    "exerciseDescription": exercise.exerciseDescription ?? "",
+                                    "templateID": templateId
+                                ]
+                                
+                                historyItems.append([
+                                    "entity": "ExerciseTemplate",
+                                    "id": exerciseId,
+                                    "type": 0, // Insert
+                                    "values": exerciseData
+                                ])
+                            }
+                        }
+                    }
+                    
+                    let response: [String: Any] = [
+                        "status": "success",
+                        "type": "templates_sync",
+                        "templates": historyItems
+                    ]
+                    replyHandler(response)
+                } catch {
+                    print("❌ Erreur récupération templates:", error)
+                    replyHandler(["status": "error", "message": "fetch_error"])
+                }
+                #else
+                // Sur watchOS, on ne devrait pas recevoir cette action
+                replyHandler(["status": "error", "message": "invalid_platform"])
+                #endif
+                return
+                
+            default:
+                print("⚠️ Action inconnue:", action)
+                replyHandler(["status": "error", "message": "unknown_action"])
+                return
+            }
+        }
+        
         // Traiter les messages d'objectifs
         if let type = message["type"] as? String, type == "goals",
            let goals = message["goals"] as? [String: Double] {
@@ -432,7 +599,7 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
         }
     }
     
-    private func processReceivedMessage(_ message: [String: Any]) {
+    func processReceivedMessage(_ message: [String: Any]) {
         print("🔄 Début traitement message:", message.keys)
         
         guard let historyData = message["history"] as? [[String: Any]] else {
@@ -447,6 +614,7 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
             var workoutsToSync: Set<String> = []
             var processedIds: Set<String> = []
             var hasNewWorkouts = false
+            var hasNewTemplates = false
             
             // 1. Traiter tous les changements
             for change in historyData {
@@ -474,15 +642,23 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                         continue
                     }
                     
-                    if entityName == "Workout" {
+                    switch entityName {
+                    case "Workout":
                         self.processWorkout(idString: idString, values: values, context: bg)
                         workoutsToSync.insert(idString)
                         hasNewWorkouts = true
-                    } else if entityName == "Exercise" {
+                    case "Exercise":
                         self.processExercise(idString: idString, values: values, context: bg)
                         if let workoutID = values["workoutID"] as? String {
                             workoutsToSync.insert(workoutID)
                         }
+                    case "WorkoutTemplate":
+                        self.processWorkoutTemplate(idString: idString, values: values, context: bg)
+                        hasNewTemplates = true
+                    case "ExerciseTemplate":
+                        self.processExerciseTemplate(idString: idString, values: values, context: bg)
+                    default:
+                        print("⚠️ Type d'entité inconnu: \(entityName)")
                     }
                 }
             }
@@ -493,11 +669,20 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                     try bg.save()
                     print("✅ Changements sauvegardés dans Core Data")
                     
-                    // 3. Notifier l'UI si nouveaux workouts
+                    // 3. Notifier l'UI si nouveaux workouts ou templates
                     if hasNewWorkouts {
                         DispatchQueue.main.async {
                             NotificationCenter.default.post(
                                 name: NSNotification.Name("WorkoutReceived"),
+                                object: nil
+                            )
+                        }
+                    }
+                    
+                    if hasNewTemplates {
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(
+                                name: NSNotification.Name("WorkoutTemplateReceived"),
                                 object: nil
                             )
                         }
@@ -805,83 +990,37 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     #if os(watchOS)
     // MARK: - Watch → iPhone sync
 
-    private func sendAllWorkoutsToPhone() {
-        let context = container.viewContext
-        let fetchRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+    func sendAllWorkoutsToPhone() {
+        let message: [String: Any] = [
+            "action": "requestAllWorkouts",
+            "timestamp": Date().timeIntervalSince1970
+        ]
         
-        do {
-            let workouts = try context.fetch(fetchRequest)
-            print("⌚️ Envoi de \(workouts.count) workouts vers l'iPhone")
-            
-            // Créer le payload pour tous les workouts
-            var historyItems: [[String: Any]] = []
-            
-            for workout in workouts {
-                guard let workoutId = workout.id?.uuidString else { continue }
+        print("⌚️ Demande de synchronisation des workouts...")
+        
+        if WCSession.default.isReachable {
+            print("⌚️ iPhone accessible, envoi direct...")
+            WCSession.default.sendMessage(message, replyHandler: { reply in
+                print("⌚️ Réponse reçue de l'iPhone:", reply)
                 
-                // Données du workout
-                var workoutData: [String: Any] = [
-                    "id": workoutId,
-                    "name": workout.name ?? "Unnamed",
-                    "duration": workout.duration,
-                    "completed": workout.completed,
-                    "distance": workout.distance,
-                    "date": workout.date?.timeIntervalSince1970 ?? 0
-                ]
-                
-                // Ajouter le workout
-                historyItems.append([
-                    "entity": "Workout",
-                    "id": workoutId,
-                    "type": 0, // Insert
-                    "values": workoutData
-                ])
-                
-                // Ajouter les exercices
-                if let exercises = workout.exercises as? Set<Exercise> {
-                    for exercise in exercises {
-                        guard let exerciseId = exercise.id?.uuidString else { continue }
-                        
-                        let exerciseData: [String: Any] = [
-                            "id": exerciseId,
-                            "name": exercise.name ?? "Unnamed",
-                            "duration": exercise.duration,
-                            "distance": exercise.distance,
-                            "repetitions": exercise.repetitions,
-                            "workoutID": workoutId,
-                            "order": exercise.order,
-                            "personalBest": exercise.personalBest,
-                            "date": exercise.date?.timeIntervalSince1970 ?? 0
-                        ]
-                        
-                        historyItems.append([
-                            "entity": "Exercise",
-                            "id": exerciseId,
-                            "type": 0, // Insert
-                            "values": exerciseData
-                        ])
-                    }
-                }
-            }
-            
-            if !historyItems.isEmpty {
-                let message: [String: Any] = ["history": historyItems]
-                
-                if WCSession.default.isReachable {
-                    WCSession.default.sendMessage(message, replyHandler: { reply in
-                        print("✅ \(workouts.count) workouts envoyés à l'iPhone")
-                    }) { error in
-                        print("❌ Erreur envoi workouts: \(error)")
-                        // Fallback avec transferUserInfo
-                        WCSession.default.transferUserInfo(message)
-                    }
+                if let status = reply["status"] as? String,
+                   status == "success",
+                   let type = reply["type"] as? String,
+                   type == "workouts_sync",
+                   let workouts = reply["workouts"] as? [[String: Any]] {
+                    print("⌚️ Traitement de \(workouts.count) workouts reçus")
+                    self.processReceivedMessage(["history": workouts])
                 } else {
-                    WCSession.default.transferUserInfo(message)
-                    print("📤 Workouts envoyés via transferUserInfo")
+                    print("⌚️ Format de réponse invalide:", reply)
                 }
+            }) { error in
+                print("❌ Erreur envoi demande de synchronisation:", error)
+                // Fallback avec transferUserInfo
+                WCSession.default.transferUserInfo(message)
             }
-        } catch {
-            print("❌ Erreur récupération workouts: \(error)")
+        } else {
+            print("⌚️ iPhone non accessible, utilisation de transferUserInfo")
+            WCSession.default.transferUserInfo(message)
         }
     }
     #endif
@@ -910,6 +1049,245 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
             } catch {
                 print("❌ Erreur suppression workout local: \(error)")
             }
+        }
+    }
+    
+    // MARK: - WorkoutTemplate Sync
+    
+    func sendWorkoutTemplate(_ template: WorkoutTemplate) {
+        guard
+            let templateID = template.id?.uuidString,
+            WCSession.default.activationState == .activated
+        else {
+            print("⚠️ Impossible d'envoyer le template: session non activée ou ID manquant")
+            return
+        }
+        
+        // Vérifier si on a déjà envoyé récemment pour éviter les doublons
+        let lastSentKey = "lastSentTemplate_\(templateID)"
+        let lastSent = UserDefaults.standard.object(forKey: lastSentKey) as? Date
+        
+        if let lastSent = lastSent, Date().timeIntervalSince(lastSent) < 5 {
+            print("⏭️ Template \(templateID) déjà envoyé il y a moins de 5 secondes, skip")
+            return
+        }
+        
+        // Marquer comme envoyé
+        UserDefaults.standard.set(Date(), forKey: lastSentKey)
+        
+        print("📤 Préparation envoi template \(templateID)")
+        
+        // Préparer les données du template
+        var templateData: [String: Any] = [
+            "id": templateID,
+            "name": template.name ?? "Unnamed",
+            "workoutDescription": template.workoutDescription ?? "",
+            "estimatedDuration": template.estimatedDuration,
+            "isPublic": template.isPublic,
+            "category": template.category ?? "",
+            "difficulty": template.difficulty ?? ""
+        ]
+        
+        if let date = template.createdAt {
+            templateData["createdAt"] = date.timeIntervalSince1970
+        }
+        
+        // Préparer les données des exercices associés
+        var exercisesData: [[String: Any]] = []
+        if let exercises = template.exercises?.allObjects as? [ExerciseTemplate] {
+            // Utiliser l'ordre des exercices
+            let orderedExercises = exercises.sorted { $0.order < $1.order }
+            
+            print("📊 \(orderedExercises.count) exercices à envoyer")
+            
+            for exercise in orderedExercises {
+                guard let exerciseID = exercise.id?.uuidString else { continue }
+                
+                var exData: [String: Any] = [
+                    "id": exerciseID,
+                    "name": exercise.name ?? "Unnamed",
+                    "defaultDuration": exercise.defaultDuration,
+                    "defaultDistance": exercise.defaultDistance,
+                    "defaultRepetitions": exercise.defaultRepetitions,
+                    "order": exercise.order,
+                    "exerciseDescription": exercise.exerciseDescription ?? ""
+                ]
+                
+                exercisesData.append([
+                    "entity": "ExerciseTemplate",
+                    "id": exerciseID,
+                    "type": 0, // Insert
+                    "values": exData
+                ])
+            }
+        }
+        
+        // Créer le message complet
+        var historyItems: [[String: Any]] = [
+            [
+                "entity": "WorkoutTemplate",
+                "id": templateID,
+                "type": 0, // Insert
+                "values": templateData
+            ]
+        ]
+        
+        // Ajouter les exercices au message
+        historyItems.append(contentsOf: exercisesData)
+        
+        let message: [String: Any] = ["history": historyItems]
+        
+        print("📤 Envoi de \(historyItems.count) éléments (1 template + \(exercisesData.count) exercices)")
+        
+        // Envoyer le message avec gestion des erreurs améliorée
+        if WCSession.default.isReachable {
+            print("✅ Watch/iPhone accessible, envoi direct...")
+            WCSession.default.sendMessage(
+                message,
+                replyHandler: { reply in
+                    print("✅ Template envoyé avec succès, réponse:", reply)
+                    // Nettoyer le flag après succès
+                    UserDefaults.standard.removeObject(forKey: lastSentKey)
+                },
+                errorHandler: { error in
+                    print("❌ Erreur d'envoi WCSession:", error)
+                    print("📤 Tentative avec transferUserInfo comme fallback")
+                    WCSession.default.transferUserInfo(message)
+                }
+            )
+        } else {
+            print("📤 WCSession.isReachable = false, utilisation de transferUserInfo")
+            WCSession.default.transferUserInfo(message)
+        }
+    }
+    
+    // Force l'envoi de tous les templates
+    func forceSendAllTemplates() {
+        let ctx = container.newBackgroundContext()
+        ctx.perform {
+            do {
+                let fetchRequest: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+                let templates = try ctx.fetch(fetchRequest)
+                
+                print("🔄 Envoi forcé de \(templates.count) templates")
+                
+                for template in templates {
+                    self.sendWorkoutTemplate(template)
+                }
+                
+            } catch {
+                print("❌ Erreur récupération templates:", error)
+            }
+        }
+    }
+    
+    private func processWorkoutTemplate(idString: String, values: [String: Any], context: NSManagedObjectContext) {
+        let fetchRequest: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", idString)
+        
+        do {
+            let existingTemplates = try context.fetch(fetchRequest)
+            
+            let template: WorkoutTemplate
+            if let existing = existingTemplates.first {
+                template = existing
+                print("📝 Mise à jour d'un template existant:", idString)
+            } else {
+                template = WorkoutTemplate(context: context)
+                template.id = UUID(uuidString: idString)
+                print("📝 Création d'un nouveau template:", idString)
+            }
+            
+            if let name = values["name"] as? String {
+                template.name = name
+            }
+            
+            if let description = values["workoutDescription"] as? String {
+                template.workoutDescription = description
+            }
+            
+            if let duration = values["estimatedDuration"] as? Double {
+                template.estimatedDuration = duration
+            }
+            
+            if let isPublic = values["isPublic"] as? Bool {
+                template.isPublic = isPublic
+            }
+            
+            if let category = values["category"] as? String {
+                template.category = category
+            }
+            
+            if let difficulty = values["difficulty"] as? String {
+                template.difficulty = difficulty
+            }
+            
+            if let dateTimestamp = values["createdAt"] as? Double {
+                template.createdAt = Date(timeIntervalSince1970: dateTimestamp)
+            }
+            
+        } catch {
+            print("❌ Erreur lors du traitement du template:", error)
+        }
+    }
+    
+    private func processExerciseTemplate(idString: String, values: [String: Any], context: NSManagedObjectContext) {
+        let fetchRequest: NSFetchRequest<ExerciseTemplate> = ExerciseTemplate.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", idString)
+        
+        do {
+            let existingExercises = try context.fetch(fetchRequest)
+            
+            let exercise: ExerciseTemplate
+            if let existing = existingExercises.first {
+                exercise = existing
+                print("📝 Mise à jour d'un exercice template existant:", idString)
+            } else {
+                exercise = ExerciseTemplate(context: context)
+                exercise.id = UUID(uuidString: idString)
+                print("📝 Création d'un nouvel exercice template:", idString)
+            }
+            
+            if let name = values["name"] as? String {
+                exercise.name = name
+            }
+            
+            if let duration = values["defaultDuration"] as? Double {
+                exercise.defaultDuration = duration
+            }
+            
+            if let distance = values["defaultDistance"] as? Double {
+                exercise.defaultDistance = distance
+            }
+            
+            if let repetitions = values["defaultRepetitions"] as? Int16 {
+                exercise.defaultRepetitions = repetitions
+            }
+            
+            if let order = values["order"] as? Int16 {
+                exercise.order = order
+            }
+            
+            if let description = values["exerciseDescription"] as? String {
+                exercise.exerciseDescription = description
+            }
+            
+            // Associer au template parent si nécessaire
+            if let templateIDString = values["templateID"] as? String,
+               let templateID = UUID(uuidString: templateIDString) {
+                let templateFetch: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+                templateFetch.predicate = NSPredicate(format: "id == %@", templateID as CVarArg)
+                
+                let templates = try context.fetch(templateFetch)
+                if let parentTemplate = templates.first {
+                    exercise.workoutTemplate = parentTemplate
+                    print("🔗 Exercice template associé au template:", templateIDString)
+                } else {
+                    print("⚠️ Template parent non trouvé:", templateIDString)
+                }
+            }
+        } catch {
+            print("❌ Erreur lors du traitement de l'exercice template:", error)
         }
     }
 }
