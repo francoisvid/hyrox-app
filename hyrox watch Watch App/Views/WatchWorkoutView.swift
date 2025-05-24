@@ -78,9 +78,10 @@ struct WatchWorkoutView: View {
 
     private var startWorkoutView: some View {
         VStack(spacing: 15) {
-            Text("MyROX")
-                .font(.title2).bold()
-                .foregroundColor(Color.white)
+            // Ajout du compteur de workouts
+            Text("\(viewModel.workouts.count) workouts enregistrés")
+                .font(.subheadline)
+                .foregroundColor(Color.cyan)
             
             // Liste des templates
             ScrollView {
@@ -90,37 +91,32 @@ struct WatchWorkoutView: View {
                     }
                 }
             }
-            .frame(height: 150)
+            .frame(height: 200)
             
-            // Ajout du compteur de workouts
-            Text("\(viewModel.workouts.count) workouts enregistrés")
-                .font(.subheadline)
-                .foregroundColor(Color.cyan)
+//            // Hardcoded count if ExerciseConfig isn't available
+//            Text("8 exercices")
+//                .font(.subheadline)
+//                .foregroundColor(Color.secondary)
             
-            // Hardcoded count if ExerciseConfig isn't available
-            Text("8 exercices")
-                .font(.subheadline)
-                .foregroundColor(Color.secondary)
+//            Button("NOUVEAU WORKOUT") {
+//                let newWorkout: () = viewModel.startWorkout()
+//                viewModel.saveAndSync()
+//                currentExerciseIndex = 0
+//            }
+//            .buttonStyle(.borderedProminent)
+//            .tint(Color.yellow)
+//            .foregroundColor(Color.black)
             
-            Button("NOUVEAU WORKOUT") {
-                let newWorkout: () = viewModel.startWorkout()
-                viewModel.saveAndSync()
-                currentExerciseIndex = 0
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.yellow)
-            .foregroundColor(Color.black)
-            
-            // Bouton de synchronisation des templates
-            Button(action: syncTemplates) {
-                Text("SYNC TEMPLATES")
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(8)
-            }
+//            // Bouton de synchronisation des templates
+//            Button(action: syncTemplates) {
+//                Text("SYNC TEMPLATES")
+//                    .font(.headline)
+//                    .foregroundColor(.black)
+//                    .frame(maxWidth: .infinity)
+//                    .padding()
+//                    .background(Color.blue)
+//                    .cornerRadius(8)
+//            }
         }
     }
 
@@ -187,9 +183,9 @@ struct WatchWorkoutView: View {
     }
 
     private func currentExerciseCard(for exercise: Exercise) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             Text("\(currentExerciseIndex + 1)/\(viewModel.currentExercises.count)")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(Color.secondary)
 
             Text(exercise.name ?? "Exercice")
@@ -204,49 +200,52 @@ struct WatchWorkoutView: View {
                 let goal = GoalsManager.shared.getGoalFor(exerciseName: name)
                 if goal > 0 {
                     Text("Objectif: \(formatTime(goal))")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(Color.yellow)
                 }
             }
 
             if viewModel.isExerciseCompleted(exercise) {
                 Text("✓ Terminé")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(Color.green)
             }
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Button {
                     selectedExercise = exercise
                     resetExerciseData()
                     showingExerciseDetail = true
                 } label: {
                     Text(viewModel.isExerciseCompleted(exercise) ? "MODIFIER" : "DÉMARRER")
-                        .font(.caption).bold()
+                        .font(.caption2).bold()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.yellow)
                 .foregroundColor(Color.black)
+                .frame(height: 24)
 
-                HStack(spacing: 20) {
+                HStack(spacing: 12) {
                     if currentExerciseIndex > 0 {
                         Button {
                             withAnimation { currentExerciseIndex -= 1 }
                         } label: {
                             Image(systemName: "chevron.left")
-                                .font(.caption)
+                                .font(.caption2)
                         }
                         .buttonStyle(.bordered)
+                        .frame(width: 24, height: 24)
                     }
                     if currentExerciseIndex < viewModel.currentExercises.count - 1 {
                         Button {
                             withAnimation { currentExerciseIndex += 1 }
                         } label: {
                             Image(systemName: "chevron.right")
-                                .font(.caption)
+                                .font(.caption2)
                         }
                         .buttonStyle(.bordered)
                         .tint(Color.green)
+                        .frame(width: 24, height: 24)
                     } else if viewModel.isExerciseCompleted(exercise) {
                         Button("FIN") {
                             viewModel.endWorkout()
@@ -254,13 +253,15 @@ struct WatchWorkoutView: View {
                         }
                         .buttonStyle(.bordered)
                         .tint(Color.red)
+                        .font(.caption2)
+                        .frame(height: 24)
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(8)
         .background(Color.gray.opacity(0.2))
-        .cornerRadius(10)
+        .cornerRadius(8)
     }
 
     // MARK: - Exercise Detail

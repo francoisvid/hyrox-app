@@ -197,8 +197,9 @@ private struct WorkoutSummaryView: View {
             
             HStack {
                 Text(formatTime(workout.duration))
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 48, weight: .bold))
                     .foregroundColor(.white)
+                    .italic()
                 Spacer()
             }
             

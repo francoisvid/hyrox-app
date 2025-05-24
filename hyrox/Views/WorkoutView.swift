@@ -54,24 +54,27 @@ struct WorkoutView: View {
                         .padding(.top, 30)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingNewWorkoutSheet = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.yellow)
-                            .padding(.trailing, 10)
-                            .padding(.top, 30)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        Button(role: .destructive, action: {
-                            viewModel.deleteAllTemplates()
-                        }) {
-                            Label("Supprimer tous les templates", systemImage: "trash")
+                    HStack(spacing: 15) {
+                        Menu {
+                            Button(role: .destructive, action: {
+                                viewModel.deleteAllTemplates()
+                            }) {
+                                Label("Supprimer tous les templates", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.yellow)
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                        
+                        Button(action: { showingNewWorkoutSheet = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 30))
+                                .foregroundColor(.yellow)
+                        }
                     }
+                    .padding(.trailing, 10)
+                    .padding(.top, 30)
                 }
             }
             .sheet(isPresented: $showingActiveWorkout, onDismiss: {
