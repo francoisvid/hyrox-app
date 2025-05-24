@@ -55,6 +55,44 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
     
     // MARK: - Synchronisation directe
     
+    // TEST
+    #if os(watchOS)
+    func syncAllFromiPhone() {
+        guard WCSession.default.activationState == .activated else {
+            print("❌ WCSession non activé")
+            return
+        }
+        
+        print("⌚️ 🔄 Synchronisation complète demandée")
+        
+        let message: [String: Any] = [
+            "action": "syncAll",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.isReachable {
+            print("⌚️ iPhone accessible, demande directe")
+            WCSession.default.sendMessage(message, replyHandler: { reply in
+                print("⌚️ ✅ Synchronisation terminée:", reply)
+                
+                // Forcer PLUSIEURS notifications pour être sûr
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    print("⌚️ 📢 Envoi des notifications de mise à jour")
+                    NotificationCenter.default.post(name: NSNotification.Name("WorkoutReceived"), object: nil)
+                    NotificationCenter.default.post(name: NSNotification.Name("WorkoutTemplateReceived"), object: nil)
+                    
+                    // Notification générale pour forcer la mise à jour
+                    NotificationCenter.default.post(name: NSNotification.Name("SyncCompleted"), object: nil)
+                }
+            }) { error in
+                print("⌚️ ❌ Erreur sync:", error.localizedDescription)
+            }
+        } else {
+            print("⌚️ iPhone non accessible")
+        }
+    }
+    #endif
+    
     // Envoie un workout spécifique à l'autre appareil
     func sendWorkout(_ workout: Workout) {
         guard
@@ -333,6 +371,15 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                 #else
                 // Sur watchOS, on ne devrait pas recevoir cette action
                 replyHandler(["status": "error", "message": "invalid_platform"])
+                #endif
+                return
+                
+            case "syncAll":
+                print("📥 Demande de synchronisation complète reçue")
+                #if os(iOS)
+                DispatchQueue.main.async {
+                    self.sendAllDataToWatch(replyHandler: replyHandler)
+                }
                 #endif
                 return
                 
@@ -1101,6 +1148,206 @@ final class DataSyncManager: NSObject, WCSessionDelegate, ObservableObject {
                 print("❌ Erreur récupération workouts Watch: \(error)")
             }
         }
+    }
+    #endif
+    
+    // TEST
+    #if os(iOS)
+    private func sendAllDataToWatch(replyHandler: @escaping ([String: Any]) -> Void) {
+        print("📤 Début de l'envoi des données vers la Watch")
+        
+        let context = container.viewContext
+        var allData: [[String: Any]] = []
+        var workoutCount = 0
+        var templateCount = 0
+        
+        // ==========================================
+        // 1. RÉCUPÉRATION DES WORKOUTS
+        // ==========================================
+        let workoutRequest: NSFetchRequest<Workout> = Workout.fetchRequest()
+        // Limiter aux 30 derniers jours pour éviter les transferts trop lourds
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        workoutRequest.predicate = NSPredicate(format: "date >= %@", thirtyDaysAgo as NSDate)
+        workoutRequest.sortDescriptors = [NSSortDescriptor(keyPath: \Workout.date, ascending: false)]
+        
+        do {
+            let workouts = try context.fetch(workoutRequest)
+            workoutCount = workouts.count
+            print("📤 Préparation de \(workouts.count) workouts récents")
+            
+            for workout in workouts {
+                guard let workoutId = workout.id?.uuidString else { continue }
+                
+                // Données du workout
+                let workoutData: [String: Any] = [
+                    "id": workoutId,
+                    "name": workout.name ?? "Unnamed",
+                    "duration": workout.duration,
+                    "completed": workout.completed,
+                    "distance": workout.distance,
+                    "date": workout.date?.timeIntervalSince1970 ?? 0
+                ]
+                
+                allData.append([
+                    "entity": "Workout",
+                    "id": workoutId,
+                    "type": 0, // Insert
+                    "values": workoutData
+                ])
+                
+                // Exercices du workout
+                if let exercises = workout.exercises as? Set<Exercise> {
+                    let orderedExercises = workout.orderedExercises
+                    for exercise in orderedExercises {
+                        guard let exerciseId = exercise.id?.uuidString else { continue }
+                        
+                        let exerciseData: [String: Any] = [
+                            "id": exerciseId,
+                            "name": exercise.name ?? "Unnamed",
+                            "duration": exercise.duration,
+                            "distance": exercise.distance,
+                            "repetitions": exercise.repetitions,
+                            "workoutID": workoutId,
+                            "order": exercise.order,
+                            "personalBest": exercise.personalBest,
+                            "date": exercise.date?.timeIntervalSince1970 ?? 0
+                        ]
+                        
+                        allData.append([
+                            "entity": "Exercise",
+                            "id": exerciseId,
+                            "type": 0, // Insert
+                            "values": exerciseData
+                        ])
+                    }
+                }
+            }
+        } catch {
+            print("❌ Erreur récupération workouts:", error.localizedDescription)
+        }
+        
+        // ==========================================
+        // 2. RÉCUPÉRATION DES TEMPLATES
+        // ==========================================
+        let templateRequest: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+        templateRequest.sortDescriptors = [NSSortDescriptor(keyPath: \WorkoutTemplate.createdAt, ascending: false)]
+        
+        do {
+            let templates = try context.fetch(templateRequest)
+            templateCount = templates.count
+            print("📤 Préparation de \(templates.count) templates")
+            
+            for template in templates {
+                guard let templateId = template.id?.uuidString else { continue }
+                
+                // Données du template
+                let templateData: [String: Any] = [
+                    "id": templateId,
+                    "name": template.name ?? "Unnamed",
+                    "workoutDescription": template.workoutDescription ?? "",
+                    "estimatedDuration": template.estimatedDuration,
+                    "isPublic": template.isPublic,
+                    "category": template.category ?? "",
+                    "difficulty": template.difficulty ?? "",
+                    "createdAt": template.createdAt?.timeIntervalSince1970 ?? 0
+                ]
+                
+                allData.append([
+                    "entity": "WorkoutTemplate",
+                    "id": templateId,
+                    "type": 0, // Insert
+                    "values": templateData
+                ])
+                
+                // Exercices du template
+                if let exercises = template.exercises as? Set<ExerciseTemplate> {
+                    let orderedExercises = exercises.sorted { $0.order < $1.order }
+                    for exercise in orderedExercises {
+                        guard let exerciseId = exercise.id?.uuidString else { continue }
+                        
+                        let exerciseData: [String: Any] = [
+                            "id": exerciseId,
+                            "name": exercise.name ?? "Unnamed",
+                            "defaultDuration": exercise.defaultDuration,
+                            "defaultDistance": exercise.defaultDistance,
+                            "defaultRepetitions": exercise.defaultRepetitions,
+                            "order": exercise.order,
+                            "exerciseDescription": exercise.exerciseDescription ?? "",
+                            "templateID": templateId
+                        ]
+                        
+                        allData.append([
+                            "entity": "ExerciseTemplate",
+                            "id": exerciseId,
+                            "type": 0, // Insert
+                            "values": exerciseData
+                        ])
+                    }
+                }
+            }
+        } catch {
+            print("❌ Erreur récupération templates:", error.localizedDescription)
+        }
+        
+        // ==========================================
+        // 3. ENVOI DES DONNÉES À LA WATCH
+        // ==========================================
+        
+        guard !allData.isEmpty else {
+            print("⚠️ Aucune donnée à envoyer")
+            replyHandler([
+                "status": "success",
+                "totalItems": 0,
+                "message": "Aucune donnée disponible"
+            ])
+            return
+        }
+        
+        let message: [String: Any] = ["history": allData]
+        print("📤 Envoi de \(allData.count) éléments (\(workoutCount) workouts, \(templateCount) templates)")
+        
+        // Méthode d'envoi fiable : Double canal
+        let success = sendToWatchReliably(message: message)
+        
+        // Réponse immédiate à la Watch
+        replyHandler([
+            "status": success ? "success" : "partial",
+            "totalItems": allData.count,
+            "workouts": workoutCount,
+            "templates": templateCount,
+            "message": success ? "Synchronisation terminée" : "Envoi initié (transfert en arrière-plan)"
+        ])
+        
+        print("✅ Synchronisation iPhone -> Watch terminée (\(allData.count) éléments)")
+    }
+
+    // ==========================================
+    // 4. MÉTHODE D'ENVOI FIABLE
+    // ==========================================
+    private func sendToWatchReliably(message: [String: Any]) -> Bool {
+        var success = false
+        
+        // Méthode 1: Envoi direct si possible (temps réel)
+        if WCSession.default.isReachable {
+            print("📱 Watch accessible - Envoi direct")
+            WCSession.default.sendMessage(message, replyHandler: { reply in
+                print("✅ Envoi direct réussi:", reply)
+            }) { error in
+                print("⚠️ Envoi direct échoué:", error.localizedDescription)
+                // Fallback automatique vers transferUserInfo
+                WCSession.default.transferUserInfo(message)
+                print("📱 Fallback: transferUserInfo activé")
+            }
+            success = true
+        } else {
+            print("📱 Watch non accessible - Envoi différé")
+        }
+        
+        // Méthode 2: Envoi différé (toujours actif pour fiabilité)
+        WCSession.default.transferUserInfo(message)
+        print("📱 TransferUserInfo programmé (fiabilité)")
+        
+        return success
     }
     #endif
     

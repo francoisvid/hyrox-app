@@ -28,6 +28,7 @@ struct WatchWorkoutView: View {
                         startWorkoutView
                     }
                 }
+                .padding(.horizontal, 12)
                 .padding(.bottom, 20)
             }
             .background(Color.black)
@@ -35,6 +36,13 @@ struct WatchWorkoutView: View {
         }
         .onAppear {
             viewModel.reloadWorkouts()
+        }
+        .onDisappear {
+            timer?.invalidate()
+        }
+        // MARK: - Notifications
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SyncCompleted"))) { _ in
+            handleSyncCompleted()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutsDeleted"))) { _ in
             viewModel.reloadWorkouts()
@@ -48,16 +56,26 @@ struct WatchWorkoutView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutCompleted"))) { _ in
             viewModel.reloadWorkouts()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutTemplateReceived"))) { _ in
+            handleTemplateReceived()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave, object: DataController.shared.container.viewContext)) { _ in
             viewModel.reloadWorkouts()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutTemplateReceived"))) { _ in
-            viewModel.loadTemplates()
-            viewModel.objectWillChange.send()
-        }
-        .onDisappear {
-            timer?.invalidate()
-        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func handleSyncCompleted() {
+        print("⌚️ 🔄 Synchronisation terminée, mise à jour de l'UI")
+        viewModel.reloadWorkouts()
+        viewModel.loadTemplates()
+        viewModel.objectWillChange.send()
+    }
+
+    private func handleTemplateReceived() {
+        viewModel.loadTemplates()
+        viewModel.objectWillChange.send()
     }
     
     // MARK: - Start Screen
@@ -67,12 +85,45 @@ struct WatchWorkoutView: View {
             // Header avec statistiques
             headerStatsView
             
+            // Bouton de synchronisation
+            syncButton
+            
             // Templates disponibles
             if !viewModel.templates.isEmpty {
                 templatesListView
             } else {
                 emptyStateView
             }
+        }
+    }
+
+    private var syncButton: some View {
+        Button(action: performSync) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 14, weight: .bold))
+                Text("SYNCHRONISER")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.cyan)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func performSync() {
+        print("⌚️ Démarrage synchronisation...")
+        DataSyncManager.shared.syncAllFromiPhone()
+        
+        // Forcer le rechargement après un délai
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            print("⌚️ Rechargement forcé des données...")
+            viewModel.reloadWorkouts()
+            viewModel.loadTemplates()
+            viewModel.objectWillChange.send()
         }
     }
     

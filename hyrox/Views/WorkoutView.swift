@@ -733,42 +733,6 @@ private struct StartWorkoutView: View {
     let workoutManager = WorkoutManager(dataController: DataController.shared)
     let viewModel = WorkoutViewModel(workoutManager: workoutManager)
     
-    // Créer quelques templates de test pour la preview
-    let template1 = WorkoutTemplate(context: context)
-    template1.id = UUID()
-    template1.name = "Template Test 1"
-    template1.workoutDescription = "Description du template 1"
-    template1.createdAt = Date()
-    
-    // Ajouter des exercices au template 1
-    let exercises1 = ["SkiErg", "RowErg", "Burpees Broad Jump"]
-    for (index, name) in exercises1.enumerated() {
-        let exercise = ExerciseTemplate(context: context)
-        exercise.id = UUID()
-        exercise.name = name
-        exercise.order = Int16(index)
-        exercise.workoutTemplate = template1
-    }
-    
-    let template2 = WorkoutTemplate(context: context)
-    template2.id = UUID()
-    template2.name = "Template Test 2"
-    template2.workoutDescription = "Description du template 2"
-    template2.createdAt = Date()
-    
-    // Ajouter des exercices au template 2
-    let exercises2 = ["Wall Balls", "Sled Push", "Sled Pull", "Farmers Carry"]
-    for (index, name) in exercises2.enumerated() {
-        let exercise = ExerciseTemplate(context: context)
-        exercise.id = UUID()
-        exercise.name = name
-        exercise.order = Int16(index)
-        exercise.workoutTemplate = template2
-    }
-    
-    // Ajouter les templates au viewModel
-    viewModel.setPreviewTemplates([template1, template2])
-    
     return WorkoutView(viewModel: viewModel)
         .environment(\.managedObjectContext, context)
         .preferredColorScheme(.dark)
