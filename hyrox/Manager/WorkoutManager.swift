@@ -145,6 +145,53 @@ final class WorkoutManager: ObservableObject {
         }
     }
 
+    func startWorkout(_ workout: Workout) {
+        // Réinitialiser les exercices
+        if let exercises = workout.exercises as? Set<Exercise> {
+            for exercise in exercises {
+                exercise.duration = 0
+                exercise.distance = 0
+                exercise.repetitions = 0
+            }
+        }
+        
+        // Mettre à jour l'interface
+        currentWorkout = workout
+        isWorkoutActive = true
+        startTime = Date()
+        startTimers()
+        
+        // Sauvegarder les changements
+        DataController.shared.saveContext()
+        
+        // Synchronisation selon la plateforme
+        #if os(watchOS)
+        // Sur Watch : envoyer à l'iPhone
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DataSyncManager.shared.sendWorkout(workout)
+            print("⌚️ Workout redémarré envoyé vers iPhone")
+        }
+        #endif
+        
+        #if os(iOS)
+        Task { @MainActor in
+            do {
+                // 1. Sauvegarder dans Firebase
+                try await DataSyncManager.shared.saveWorkoutToFirebase(workout)
+                print("☁️ Workout redémarré sauvegardé dans Firebase")
+                
+                // 2. Envoyer à la Watch
+                if WCSession.default.isReachable {
+                    DataSyncManager.shared.sendWorkout(workout)
+                    print("📱 Workout redémarré envoyé vers Watch")
+                }
+            } catch {
+                print("❌ Erreur synchronisation workout redémarré: \(error)")
+            }
+        }
+        #endif
+    }
+
     func endWorkout() {
         guard let workout = currentWorkout, let start = startTime else { return }
         
@@ -494,4 +541,75 @@ final class WorkoutManager: ObservableObject {
 //        }
 //    }
     #endif
+
+    func startWorkoutFromTemplate(_ template: WorkoutTemplate) {
+        let context = dataController.container.viewContext
+        
+        context.perform { [weak self] in
+            guard let self = self else { return }
+            
+            print("🆕 Création d'un workout depuis le template: \(template.name ?? "Sans nom")")
+            
+            // Créer le workout
+            let workout = Workout.create(name: template.name ?? "Entraînement", date: Date(), in: context)
+            workout.template = template
+            workout.templateId = template.id
+            
+            // Ajouter les exercices du template
+            if let exerciseTemplates = template.exercises as? Set<ExerciseTemplate> {
+                for template in exerciseTemplates {
+                    let ex = workout.addExercise(name: template.name ?? "")
+                    ex.targetTime = template.defaultDuration
+                    ex.distance = template.defaultDistance
+                    ex.repetitions = template.defaultRepetitions
+                }
+            }
+            
+            do {
+                // Sauvegarder dans CoreData
+                try context.save()
+                print("✅ Workout créé depuis template sauvegardé dans CoreData")
+                
+                // Mettre à jour l'interface sur le main thread
+                DispatchQueue.main.async {
+                    self.currentWorkout = workout
+                    self.isWorkoutActive = true
+                    self.startTime = Date()
+                    self.startTimers()
+                    self.loadWorkouts() // Rafraîchir la liste
+                }
+                
+                // Synchronisation selon la plateforme
+                #if os(watchOS)
+                // Sur Watch : envoyer à l'iPhone
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    DataSyncManager.shared.sendWorkout(workout)
+                    print("⌚️ Workout créé depuis template envoyé vers iPhone")
+                }
+                #endif
+                
+                #if os(iOS)
+                // Sur iPhone : sauvegarder dans Firebase ET envoyer à la Watch
+                Task { @MainActor in
+                    do {
+                        // 1. Sauvegarder dans Firebase
+                        try await DataSyncManager.shared.saveWorkoutToFirebase(workout)
+                        print("☁️ Workout créé depuis template sauvegardé dans Firebase")
+                        
+                        // 2. Envoyer à la Watch si connectée
+                        if WCSession.default.isReachable {
+                            DataSyncManager.shared.sendWorkout(workout)
+                            print("📱 Workout créé depuis template envoyé vers Watch")
+                        }
+                    } catch {
+                        print("❌ Erreur synchronisation: \(error)")
+                    }
+                }
+                #endif
+                
+            } catch {
+                print("❌ Erreur création workout depuis template: \(error)")
+            }
+        }
+    }
 }

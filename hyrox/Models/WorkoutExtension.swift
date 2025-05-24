@@ -123,10 +123,8 @@ extension Workout {
     }
 
     func addHeartRate(value: Double, timestamp: Date) -> HeartRatePoint {
-        guard let ctx = managedObjectContext else {
-            fatalError("No managed object context")
-        }
-        let hr = HeartRatePoint(context: ctx)
+        let context = DataController.shared.container.viewContext
+        let hr = HeartRatePoint(context: context)
         hr.id = UUID()
         hr.value = value
         hr.timestamp = timestamp

@@ -399,8 +399,6 @@ struct WatchWorkoutView: View {
         }
     }
     
-    // TODO : TEST
-    
     func clearAllData() {
         debugMessage = "Suppression de toutes les données..."
         showDebug = true
