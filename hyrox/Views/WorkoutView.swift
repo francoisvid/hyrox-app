@@ -13,8 +13,8 @@ struct WorkoutView: View {
         NavigationView {
             ScrollView {
                 LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 15),
-                    GridItem(.flexible(), spacing: 15)
+                    GridItem(.flexible(), spacing: 13),
+                    GridItem(.flexible(), spacing: 13)
                 ], spacing: 20) {
                     // Liste des templates existants
                     ForEach(viewModel.templates) { template in
@@ -40,7 +40,7 @@ struct WorkoutView: View {
                         }, viewModel: viewModel)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 10)
                 .padding(.top, 30)
             }
             .background(Color.black.ignoresSafeArea())
@@ -50,7 +50,6 @@ struct WorkoutView: View {
                     Text("Entraînements")
                         .font(.largeTitle.bold())
                         .foregroundColor(.white)
-                        .padding(.leading, 10)
                         .padding(.top, 30)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -73,7 +72,6 @@ struct WorkoutView: View {
                                 .foregroundColor(.yellow)
                         }
                     }
-                    .padding(.trailing, 10)
                     .padding(.top, 30)
                 }
             }
@@ -118,65 +116,218 @@ struct WorkoutTemplateCard: View {
             .sorted { $0.order < $1.order } ?? []
     }
     
+    private var exerciseCount: Int {
+        orderedExercises.count
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(template.name ?? "Sans nom")
-                .font(.headline)
-                .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header avec titre et badge
+            headerSection
             
+            // Description si présente
             if let description = template.workoutDescription {
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
+                descriptionSection(description)
             }
             
             // Liste des exercices
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(orderedExercises.enumerated()), id: \.element.id) { index, exercise in
-                        Text("\(index + 1). \(exercise.name ?? "")")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+            exerciseListSection
+            
+            // Footer avec durée et bouton
+            footerSection
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemGray6))
+                .shadow(
+                    color: isCurrentTemplate ? .yellow.opacity(0.3) : .black.opacity(0.1),
+                    radius: isCurrentTemplate ? 8 : 4,
+                    x: 0,
+                    y: 2
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    isCurrentTemplate ? Color.yellow : Color.clear,
+                    lineWidth: isCurrentTemplate ? 2 : 0
+                )
+        )
+    }
+    
+    // MARK: - Header Section
+    private var headerSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(template.name ?? "Sans nom")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                
+                HStack(spacing: 8) {
+                    // Badge nombre d'exercices
+                    Label("\(exerciseCount)", systemImage: "figure.strengthtraining.traditional")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.7))
+                        .clipShape(Capsule())
+                    
+                    // Badge actuel si applicable
+                    if isCurrentTemplate {
+                        Text("EN COURS")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.yellow)
+                            .clipShape(Capsule())
                     }
                 }
-                .padding(8)
             }
-            .frame(height: 110)
-            .background(Color(.systemGray5))
-            .cornerRadius(8)
             
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
+    }
+    
+    // MARK: - Description Section
+    private func descriptionSection(_ description: String) -> some View {
+        Text(description)
+            .font(.subheadline)
+            .foregroundColor(.gray)
+            .lineLimit(2)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+    }
+    
+    // MARK: - Exercise List Section
+    private var exerciseListSection: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(orderedExercises.prefix(6).enumerated()), id: \.element.id) { index, exercise in
+                    HStack(spacing: 12) {
+                        // Numéro d'exercice (sans cercle)
+                        Text("\(index + 1).")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.blue.opacity(0.8))
+                        
+                        // Nom de l'exercice avec plus d'espace
+                        Text(exercise.name ?? "")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        Spacer()
+                        
+                        // Icône du type d'exercice
+                        if let name = exercise.name,
+                           let definition = ExerciseDefinitions.all[name] {
+                            Image(systemName: iconForCategory(definition.category))
+                                .font(.system(size: 10))
+                        }
+                    }
+                }
+                
+                // Indicateur s'il y a plus d'exercices
+                if orderedExercises.count > 6 {
+                    HStack(spacing: 8) {
+                        Text("...")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.blue.opacity(0.8))
+                            .frame(minWidth: 20, alignment: .leading)
+                        
+                        Text("et \(orderedExercises.count - 6) autres exercices")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 16)
+        }
+        .frame(height: 160) // Augmenté pour plus d'espace
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray5))
+        )
+        .padding(.horizontal, 13)
+    }
+    
+    // MARK: - Footer Section
+    private var footerSection: some View {
+        VStack(spacing: 16) {
+            // Durée estimée
             if template.estimatedDuration > 0 {
-                Text("Durée estimée: \(TimeFormatter.formatTime(template.estimatedDuration))")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                HStack {
+                    Image(systemName: "clock")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    Text("Durée estimée: \(TimeFormatter.formatTime(template.estimatedDuration))")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 20)
             }
             
+            // Bouton d'action
             Button(action: {
                 guard !isStarting else { return }
                 isStarting = true
                 print("🟡 Clic sur le bouton \(isCurrentTemplate ? "VOIR" : "DÉMARRER") pour le template: \(template.name ?? "Sans nom")")
+                
                 onStart()
-                // Réinitialiser après un court délai
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     isStarting = false
                 }
             }) {
-                Text(isCurrentTemplate ? "VOIR" : "DÉMARRER")
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(isCurrentTemplate ? Color.gray : Color.yellow)
-                    .cornerRadius(8)
+                HStack(spacing: 8) {
+                    if isStarting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: isCurrentTemplate ? "eye" : "play.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    
+                    Text(isCurrentTemplate ? "VOIR" : "DÉMARRER")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isCurrentTemplate ? Color.gray.opacity(0.8) : Color.yellow)
+                )
+                .scaleEffect(isStarting ? 0.95 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isStarting)
             }
             .disabled(isStarting)
+            .padding(.horizontal, 13)
+            .padding(.bottom, 13)
+            .padding(.top, 10)
         }
-        .padding(10)
-        .frame(height: 250)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+    }
+    
+    // MARK: - Helper Functions
+    private func iconForCategory(_ category: String) -> String {
+        switch category {
+        case "Cardio": return "heart.fill"
+        case "Force": return "dumbbell.fill"
+        case "Core": return "figure.core.training"
+        case "Plyo": return "figure.jumprope"
+        default: return "figure.strengthtraining.traditional"
+        }
     }
 }
 
@@ -196,7 +347,7 @@ struct NewWorkoutTemplateView: View {
                 }
                 
                 Section(header: Text("Exercices")) {
-                    ForEach(Workout.standardExerciseOrder, id: \.self) { name in
+                    ForEach(ExerciseDefinitions.all.keys.sorted(), id: \.self) { name in
                         if let def = ExerciseDefinitions.all[name] {
                             Toggle(isOn: Binding(
                                 get: { selectedExercises.contains(name) },
@@ -213,6 +364,10 @@ struct NewWorkoutTemplateView: View {
                                     Text(def.description)
                                         .font(.caption)
                                         .foregroundColor(.gray)
+                                    // Optionnel : afficher la catégorie
+                                    Text(def.category)
+                                        .font(.caption2)
+                                        .foregroundColor(.yellow)
                                 }
                             }
                         }
@@ -534,14 +689,16 @@ private struct StartWorkoutView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            Text("Exercices Hyrox")
+            Text("Exercices sélectionnés") // Titre plus approprié
                 .font(.headline)
                 .foregroundColor(.white)
                 .padding(.top)
 
             List {
-                ForEach(Workout.standardExerciseOrder, id: \.self) { name in
-                    if let def = ExerciseDefinitions.all[name] {
+                // Afficher les exercices du workout en cours ou du template
+                ForEach(viewModel.currentExercises, id: \.id) { exercise in
+                    if let name = exercise.name,
+                       let def = ExerciseDefinitions.all[name] {
                         HStack {
                             Text(def.name)
                                 .foregroundColor(.white)

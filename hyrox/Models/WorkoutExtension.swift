@@ -56,8 +56,11 @@ extension Workout {
                 map.removeValue(forKey: name)
             }
         }
-        // Ajouter les exercices restants
-        result.append(contentsOf: map.values)
+        
+        // ✅ CORRECTION : Trier les exercices restants par nom pour un ordre stable
+        let remainingExercises = map.values.sorted { ($0.name ?? "") < ($1.name ?? "") }
+        result.append(contentsOf: remainingExercises)
+        
         return result
     }
 
