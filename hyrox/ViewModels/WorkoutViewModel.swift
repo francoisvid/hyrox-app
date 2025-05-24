@@ -1,12 +1,15 @@
 import Foundation
 import CoreData
 import Combine
+import WatchConnectivity
 
 @MainActor
 class WorkoutViewModel: ObservableObject {
     // MARK: - Inputs
     @Published var selectedExercise: Exercise?
     @Published var isEditingExercise: Bool = false
+    @Published var debugMessage: String = ""
+    @Published var showDebug: Bool = false
 
     // MARK: - Outputs
     @Published private(set) var currentExercises: [Exercise] = []
@@ -58,8 +61,16 @@ class WorkoutViewModel: ObservableObject {
         reloadWorkouts()
     }
 
-    @objc private func handleNewTemplate() {
+    @objc private func handleNewTemplate(_ notification: Notification) {
         print("🔵 WorkoutViewModel - Nouveau template reçu")
+        
+        // Vérifier si on doit ignorer la synchronisation
+        if let skipSync = notification.userInfo?["skipSync"] as? Bool, skipSync {
+            print("⏭️ Synchronisation ignorée pour éviter la boucle")
+            loadTemplates()
+            return
+        }
+        
         loadTemplates()
     }
 
@@ -159,7 +170,7 @@ class WorkoutViewModel: ObservableObject {
         print("🔄 WorkoutViewModel rechargé: \(workouts.count) workouts")
     }
     
-    private func loadTemplates() {
+    func loadTemplates() {
         print("🔵 WorkoutViewModel - loadTemplates appelé")
         let context = DataController.shared.container.viewContext
         let request: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
@@ -245,5 +256,86 @@ class WorkoutViewModel: ObservableObject {
 
     var personalBests: [String: Exercise] {
         workoutManager.personalBests
+    }
+
+    func clearAllData() {
+        debugMessage = "Suppression de toutes les données..."
+        showDebug = true
+        
+        // Appeler la méthode de DataController
+        DataController.shared.clearAllData()
+        
+        // Envoyer un message de synchronisation pour informer l'iPhone
+        let message: [String: Any] = [
+            "action": "clearAllData",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.activationState == .activated {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("❌ Erreur lors de l'envoi du message de suppression:", error)
+            }
+        }
+        
+        // Forcer la mise à jour du ViewModel et de la vue
+        DispatchQueue.main.async {
+            self.reloadWorkouts()
+            self.objectWillChange.send() // Force la mise à jour de la vue
+            self.debugMessage = "✅ Toutes les données ont été effacées"
+            
+            // Masquer le message après quelques secondes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.showDebug = false
+            }
+        }
+    }
+
+    // Nouvelle fonction pour supprimer tous les templates
+    func deleteAllTemplates() {
+        print("🔵 WorkoutViewModel - Suppression de tous les templates")
+        let context = DataController.shared.container.viewContext
+        
+        // 1. Supprimer de Core Data
+        let fetchRequest: NSFetchRequest<WorkoutTemplate> = WorkoutTemplate.fetchRequest()
+        do {
+            let templates = try context.fetch(fetchRequest)
+            for template in templates {
+                context.delete(template)
+            }
+            try context.save()
+            print("✅ Templates supprimés de Core Data")
+            
+            // 2. Supprimer de Firebase
+            #if os(iOS)
+            Task {
+                do {
+                    try await DataSyncManager.shared.deleteAllTemplatesFromFirebase()
+                    print("✅ Templates supprimés de Firebase")
+                    
+                    // 3. Envoyer un message à la Watch pour la synchronisation
+                    let message: [String: Any] = [
+                        "action": "templatesDeleted",
+                        "timestamp": Date().timeIntervalSince1970
+                    ]
+                    
+                    if WCSession.default.activationState == .activated {
+                        WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                            print("❌ Erreur lors de l'envoi du message de suppression des templates:", error)
+                        }
+                    }
+                    
+                    // 4. Recharger les templates après la suppression
+                    await MainActor.run {
+                        self.loadTemplates()
+                    }
+                } catch {
+                    print("❌ Erreur lors de la suppression des templates de Firebase:", error)
+                }
+            }
+            #endif
+            
+        } catch {
+            print("❌ Erreur lors de la suppression des templates:", error)
+        }
     }
 }

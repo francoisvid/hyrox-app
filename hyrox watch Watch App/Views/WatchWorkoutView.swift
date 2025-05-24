@@ -63,6 +63,12 @@ struct WatchWorkoutView: View {
         ) { _ in
             viewModel.reloadWorkouts()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutTemplateReceived"))) { _ in
+            print("🔄 Rafraîchissement après réception de templates")
+            viewModel.loadTemplates()
+            // Forcer la mise à jour de l'UI
+            viewModel.objectWillChange.send()
+        }
         .onDisappear {
             timer?.invalidate()
         }
@@ -106,38 +112,15 @@ struct WatchWorkoutView: View {
             .foregroundColor(Color.black)
             
             // Bouton de synchronisation des templates
-            Button("SYNC TEMPLATES") {
-                print("⌚️ Demande de synchronisation des templates...")
-                let message: [String: Any] = [
-                    "action": "requestAllTemplates",
-                    "timestamp": Date().timeIntervalSince1970
-                ]
-                
-                if WCSession.default.isReachable {
-                    WCSession.default.sendMessage(message, replyHandler: { reply in
-                        print("⌚️ Réponse reçue de l'iPhone:", reply)
-                        if let status = reply["status"] as? String,
-                           status == "success",
-                           let type = reply["type"] as? String,
-                           type == "templates_sync",
-                           let templates = reply["templates"] as? [[String: Any]] {
-                            print("⌚️ Traitement de \(templates.count) templates reçus")
-                            DataSyncManager.shared.processReceivedMessage(["history": templates])
-                        } else {
-                            print("⌚️ Format de réponse invalide:", reply)
-                        }
-                    }) { error in
-                        print("❌ Erreur envoi demande de synchronisation:", error)
-                        WCSession.default.transferUserInfo(message)
-                    }
-                } else {
-                    print("⌚️ iPhone non accessible, utilisation de transferUserInfo")
-                    WCSession.default.transferUserInfo(message)
-                }
+            Button(action: syncTemplates) {
+                Text("SYNC TEMPLATES")
+                    .font(.headline)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(8)
             }
-            .buttonStyle(.bordered)
-            .tint(Color.blue)
-            .foregroundColor(Color.white)
         }
     }
 
@@ -576,6 +559,40 @@ struct WatchWorkoutView: View {
                 }
             }
         )
+    }
+
+    private func syncTemplates() {
+        print("🔄 Demande de synchronisation des templates...")
+        
+        let message: [String: Any] = [
+            "action": "requestAllTemplates",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        if WCSession.default.isReachable {
+            print("⌚️ iPhone accessible, envoi direct...")
+            WCSession.default.sendMessage(message, replyHandler: { reply in
+                print("📥 Réponse reçue de l'iPhone:", reply)
+                
+                if let status = reply["status"] as? String,
+                   status == "success",
+                   let type = reply["type"] as? String,
+                   type == "templates_sync",
+                   let templates = reply["templates"] as? [[String: Any]] {
+                    print("📥 Traitement de \(templates.count) templates reçus")
+                    DataSyncManager.shared.processReceivedMessage(["history": templates])
+                } else {
+                    print("📥 Format de réponse invalide:", reply)
+                }
+            }) { error in
+                print("❌ Erreur envoi demande de synchronisation:", error)
+                // Fallback avec transferUserInfo
+                WCSession.default.transferUserInfo(message)
+            }
+        } else {
+            print("⌚️ iPhone non accessible, utilisation de transferUserInfo")
+            WCSession.default.transferUserInfo(message)
+        }
     }
 }
 // MARK;: - Sync All Local Workouts to iPhone

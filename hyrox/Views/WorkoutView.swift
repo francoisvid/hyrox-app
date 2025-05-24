@@ -62,6 +62,17 @@ struct WorkoutView: View {
                             .padding(.top, 30)
                     }
                 }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        Button(role: .destructive, action: {
+                            viewModel.deleteAllTemplates()
+                        }) {
+                            Label("Supprimer tous les templates", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
             }
             .sheet(isPresented: $showingActiveWorkout, onDismiss: {
                 print("🟡 Sheet fermée")
